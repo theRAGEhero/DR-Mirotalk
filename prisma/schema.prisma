@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  passwordHash       String
+  role               String           @default("USER")
+  mustChangePassword Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  meetingsCreated    Meeting[]        @relation("MeetingCreator")
+  memberships        MeetingMember[]
+  plansCreated       Plan[]           @relation("PlanCreator")
+  planPairsA         PlanPair[]       @relation("PlanPairUserA")
+  planPairsB         PlanPair[]       @relation("PlanPairUserB")
+
+  @@index([role])
+}
+
+model Meeting {
+  id          String          @id @default(cuid())
+  title       String
+  roomId      String          @unique
+  createdById String
+  createdBy   User            @relation("MeetingCreator", fields: [createdById], references: [id])
+  createdAt   DateTime        @default(now())
+  expiresAt   DateTime?
+  isActive    Boolean         @default(true)
+  language    String          @default("EN")
+  transcriptionProvider String @default("DEEPGRAM")
+  transcriptionRoundId String?
+  members     MeetingMember[]
+
+  @@index([createdById])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+model MeetingMember {
+  id        String      @id @default(cuid())
+  meetingId String
+  userId    String
+  role      String
+  createdAt DateTime    @default(now())
+  meeting   Meeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@index([userId])
+}
+
+model Plan {
+  id                   String      @id @default(cuid())
+  title                String
+  createdById          String
+  createdBy            User        @relation("PlanCreator", fields: [createdById], references: [id])
+  startAt              DateTime
+  roundDurationMinutes Int
+  roundsCount          Int
+  createdAt            DateTime    @default(now())
+  rounds               PlanRound[]
+
+  @@index([createdById])
+  @@index([startAt])
+}
+
+model PlanRound {
+  id          String     @id @default(cuid())
+  planId      String
+  roundNumber Int
+  plan        Plan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  pairs       PlanPair[]
+
+  @@unique([planId, roundNumber])
+  @@index([planId])
+}
+
+model PlanPair {
+  id          String   @id @default(cuid())
+  planRoundId String
+  roomId      String
+  userAId     String
+  userBId     String?
+  planRound   PlanRound @relation(fields: [planRoundId], references: [id], onDelete: Cascade)
+  userA       User      @relation("PlanPairUserA", fields: [userAId], references: [id])
+  userB       User?     @relation("PlanPairUserB", fields: [userBId], references: [id])
+
+  @@index([planRoundId])
+  @@index([userAId])
+  @@index([userBId])
+}
