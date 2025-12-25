@@ -7,15 +7,25 @@ type UserOption = {
   email: string;
 };
 
-type Props = {
-  users: UserOption[];
+type DataspaceOption = {
+  id: string;
+  name: string;
 };
 
-export function PlanBuilderClient({ users }: Props) {
+type Props = {
+  users: UserOption[];
+  dataspaces: DataspaceOption[];
+};
+
+export function PlanBuilderClient({ users, dataspaces }: Props) {
   const [title, setTitle] = useState("1v1 Rotation");
-  const [startAt, setStartAt] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("10:00");
   const [roundDurationMinutes, setRoundDurationMinutes] = useState(10);
   const [roundsCount, setRoundsCount] = useState(6);
+  const [syncMode, setSyncMode] = useState<"SERVER" | "CLIENT">("SERVER");
+  const [maxParticipantsPerRoom, setMaxParticipantsPerRoom] = useState(2);
+  const [dataspaceId, setDataspaceId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +42,14 @@ export function PlanBuilderClient({ users }: Props) {
     setError(null);
     setLoading(true);
 
+    if (!startDate || !startTime) {
+      setLoading(false);
+      setError("Select both date and time.");
+      return;
+    }
+
+    const startAt = `${startDate}T${startTime}`;
+
     const response = await fetch("/api/plans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,7 +58,10 @@ export function PlanBuilderClient({ users }: Props) {
         startAt,
         roundDurationMinutes,
         roundsCount,
-        participantIds: selected
+        participantIds: selected,
+        syncMode,
+        maxParticipantsPerRoom,
+        dataspaceId: dataspaceId || null
       })
     });
 
@@ -76,13 +97,23 @@ export function PlanBuilderClient({ users }: Props) {
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div>
+            <label className="text-sm font-medium">Start date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+              required
+            />
+          </div>
           <div>
             <label className="text-sm font-medium">Start time</label>
             <input
-              type="datetime-local"
-              value={startAt}
-              onChange={(event) => setStartAt(event.target.value)}
+              type="time"
+              value={startTime}
+              onChange={(event) => setStartTime(event.target.value)}
               className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
               required
             />
@@ -108,6 +139,66 @@ export function PlanBuilderClient({ users }: Props) {
               onChange={(event) => setRoundsCount(Number(event.target.value))}
               className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
             />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Max participants per room</label>
+          <select
+            value={maxParticipantsPerRoom}
+            onChange={(event) => setMaxParticipantsPerRoom(Number(event.target.value))}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          >
+            {Array.from({ length: 11 }, (_, index) => {
+              const value = index + 2;
+              return (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Dataspace (optional)</label>
+          <select
+            value={dataspaceId}
+            onChange={(event) => setDataspaceId(event.target.value)}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          >
+            <option value="">No dataspace</option>
+            {dataspaces.map((dataspace) => (
+              <option key={dataspace.id} value={dataspace.id}>
+                {dataspace.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium">Switching mode</p>
+          <div className="mt-2 flex flex-wrap gap-4 text-sm text-slate-700">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="syncMode"
+                value="SERVER"
+                checked={syncMode === "SERVER"}
+                onChange={() => setSyncMode("SERVER")}
+              />
+              Server-driven (recommended)
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="syncMode"
+                value="CLIENT"
+                checked={syncMode === "CLIENT"}
+                onChange={() => setSyncMode("CLIENT")}
+              />
+              Client-driven
+            </label>
           </div>
         </div>
 

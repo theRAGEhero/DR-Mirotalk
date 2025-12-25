@@ -11,14 +11,18 @@ model User {
   id                 String           @id @default(cuid())
   email              String           @unique
   passwordHash       String
+  telegramHandle     String?
   role               String           @default("USER")
   mustChangePassword Boolean          @default(false)
   createdAt          DateTime         @default(now())
   meetingsCreated    Meeting[]        @relation("MeetingCreator")
   memberships        MeetingMember[]
+  meetingInvites     MeetingInvite[]
   plansCreated       Plan[]           @relation("PlanCreator")
   planPairsA         PlanPair[]       @relation("PlanPairUserA")
   planPairsB         PlanPair[]       @relation("PlanPairUserB")
+  dataspacesCreated  Dataspace[]      @relation("DataspaceCreator")
+  dataspaceMemberships DataspaceMember[]
 
   @@index([role])
 }
@@ -30,12 +34,16 @@ model Meeting {
   createdById String
   createdBy   User            @relation("MeetingCreator", fields: [createdById], references: [id])
   createdAt   DateTime        @default(now())
+  scheduledStartAt DateTime?
   expiresAt   DateTime?
   isActive    Boolean         @default(true)
   language    String          @default("EN")
   transcriptionProvider String @default("DEEPGRAM")
   transcriptionRoundId String?
+  dataspaceId String?
+  dataspace   Dataspace?      @relation(fields: [dataspaceId], references: [id])
   members     MeetingMember[]
+  invites     MeetingInvite[]
 
   @@index([createdById])
   @@index([isActive])
@@ -56,19 +64,39 @@ model MeetingMember {
   @@index([userId])
 }
 
+model MeetingInvite {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@index([userId])
+  @@index([status])
+}
+
 model Plan {
   id                   String      @id @default(cuid())
   title                String
   createdById          String
   createdBy            User        @relation("PlanCreator", fields: [createdById], references: [id])
+  dataspaceId          String?
+  dataspace            Dataspace?  @relation(fields: [dataspaceId], references: [id], onDelete: SetNull)
   startAt              DateTime
   roundDurationMinutes Int
   roundsCount          Int
+  syncMode             String      @default("SERVER")
+  maxParticipantsPerRoom Int       @default(2)
   createdAt            DateTime    @default(now())
   rounds               PlanRound[]
 
   @@index([createdById])
   @@index([startAt])
+  @@index([dataspaceId])
 }
 
 model PlanRound {
@@ -95,4 +123,35 @@ model PlanPair {
   @@index([planRoundId])
   @@index([userAId])
   @@index([userBId])
+}
+
+model Dataspace {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  createdById String
+  createdBy   User              @relation("DataspaceCreator", fields: [createdById], references: [id])
+  personalOwnerId String?       @unique
+  isPrivate   Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  members     DataspaceMember[]
+  meetings    Meeting[]
+  plans       Plan[]
+
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([isPrivate])
+}
+
+model DataspaceMember {
+  id          String    @id @default(cuid())
+  dataspaceId String
+  userId      String
+  createdAt   DateTime  @default(now())
+  dataspace   Dataspace @relation(fields: [dataspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([dataspaceId, userId])
+  @@index([dataspaceId])
+  @@index([userId])
 }

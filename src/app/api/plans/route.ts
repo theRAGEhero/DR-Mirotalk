@@ -8,17 +8,17 @@ function generateRoomId() {
   return crypto.randomBytes(16).toString("base64url");
 }
 
-function makePairs(userIds: string[]) {
+function makeGroups(userIds: string[], maxParticipantsPerRoom: number) {
   const list = [...userIds];
-  if (list.length % 2 === 1) list.push("__break__");
-
-  const pairs: Array<[string, string | null]> = [];
-  for (let i = 0; i < list.length; i += 2) {
-    const a = list[i];
-    const b = list[i + 1] ?? null;
-    pairs.push([a, b === "__break__" ? null : b]);
+  if (maxParticipantsPerRoom === 2 && list.length % 2 === 1) {
+    list.push("__break__");
   }
-  return pairs;
+
+  const groups: Array<string[]> = [];
+  for (let i = 0; i < list.length; i += maxParticipantsPerRoom) {
+    groups.push(list.slice(i, i + maxParticipantsPerRoom));
+  }
+  return groups;
 }
 
 function rotate(userIds: string[]) {
@@ -59,15 +59,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not enough valid participants" }, { status: 400 });
   }
 
+  if (parsed.data.dataspaceId) {
+    const dataspace = await prisma.dataspace.findUnique({
+      where: { id: parsed.data.dataspaceId },
+      select: { id: true }
+    });
+    if (!dataspace) {
+      return NextResponse.json({ error: "Dataspace not found" }, { status: 404 });
+    }
+  }
+
+  const maxParticipantsPerRoom = parsed.data.maxParticipantsPerRoom;
   let rotation = users.map((user) => user.id);
-  const roundsData = [] as Array<{ roundNumber: number; pairs: Array<{ userAId: string; userBId: string | null; roomId: string }> }>;
+  const roundsData = [] as Array<{
+    roundNumber: number;
+    pairs: Array<{ userAId: string; userBId: string | null; roomId: string }>;
+  }>;
 
   for (let i = 0; i < parsed.data.roundsCount; i += 1) {
-    const pairs = makePairs(rotation).map(([userAId, userBId]) => ({
-      userAId,
-      userBId,
-      roomId: generateRoomId()
-    }));
+    const groups = makeGroups(rotation, maxParticipantsPerRoom);
+    const pairs = groups.flatMap((group) => {
+      const roomId = generateRoomId();
+      const roomPairs: Array<{ userAId: string; userBId: string | null; roomId: string }> = [];
+
+      for (let index = 0; index < group.length; index += 2) {
+        const userAId = group[index];
+        if (userAId === "__break__") continue;
+        const userBId = group[index + 1] ?? null;
+        roomPairs.push({
+          userAId,
+          userBId: userBId === "__break__" ? null : userBId,
+          roomId
+        });
+      }
+
+      return roomPairs;
+    });
     roundsData.push({ roundNumber: i + 1, pairs });
     rotation = rotate(rotation);
   }
@@ -76,9 +103,12 @@ export async function POST(request: Request) {
     data: {
       title: parsed.data.title,
       createdById: session.user.id,
+      dataspaceId: parsed.data.dataspaceId ?? null,
       startAt,
       roundDurationMinutes: parsed.data.roundDurationMinutes,
       roundsCount: parsed.data.roundsCount,
+      syncMode: parsed.data.syncMode,
+      maxParticipantsPerRoom,
       rounds: {
         create: roundsData.map((round) => ({
           roundNumber: round.roundNumber,

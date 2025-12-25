@@ -54,16 +54,40 @@ export async function POST(request: Request, { params }: { params: { id: string 
   });
 
   if (existing) {
+    return NextResponse.json({ message: "User already a member" });
+  }
+
+  const existingInvite = await prisma.meetingInvite.findUnique({
+    where: {
+      meetingId_userId: {
+        meetingId: meeting.id,
+        userId: invitee.id
+      }
+    }
+  });
+
+  if (existingInvite && existingInvite.status === "PENDING") {
     return NextResponse.json({ message: "User already invited" });
   }
 
-  await prisma.meetingMember.create({
-    data: {
-      meetingId: meeting.id,
-      userId: invitee.id,
-      role: "GUEST"
-    }
-  });
+  if (existingInvite && existingInvite.status === "ACCEPTED") {
+    return NextResponse.json({ message: "User already accepted the invite" });
+  }
+
+  if (existingInvite && existingInvite.status === "DECLINED") {
+    await prisma.meetingInvite.update({
+      where: { id: existingInvite.id },
+      data: { status: "PENDING" }
+    });
+  } else if (!existingInvite) {
+    await prisma.meetingInvite.create({
+      data: {
+        meetingId: meeting.id,
+        userId: invitee.id,
+        status: "PENDING"
+      }
+    });
+  }
 
   const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
   const emailResult = await sendMail({

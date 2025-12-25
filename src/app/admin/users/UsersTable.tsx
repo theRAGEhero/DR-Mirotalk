@@ -46,36 +46,40 @@ export function UsersTable({ initialUsers }: Props) {
 
   return (
     <div className="dr-card">
-      <div className="grid grid-cols-6 gap-4 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-        <span className="col-span-2">Email</span>
-        <span>Role</span>
-        <span>Must change</span>
-        <span>Created</span>
-        <span></span>
-      </div>
-      <div className="divide-y divide-slate-200">
-        {users.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-slate-500">No users yet.</div>
-        ) : (
-          users.map((user) => (
-            <div key={user.id} className="grid grid-cols-6 gap-4 px-4 py-3 text-sm">
-              <div className="col-span-2 text-slate-900">{user.email}</div>
-              <div className="text-slate-700">{user.role}</div>
-              <div className="text-slate-500">{user.mustChangePassword ? "Yes" : "No"}</div>
-              <div className="text-slate-500">{user.createdAtLabel}</div>
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => handleDelete(user.id)}
-                  className="text-sm font-medium text-red-600 hover:text-red-700"
-                  disabled={deletingId === user.id}
-                >
-                  {deletingId === user.id ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+      <div className="overflow-x-auto">
+        <div className="min-w-[640px]">
+          <div className="grid grid-cols-6 gap-4 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase text-slate-500">
+            <span className="col-span-2">Email</span>
+            <span>Role</span>
+            <span>Must change</span>
+            <span>Created</span>
+            <span></span>
+          </div>
+          <div className="divide-y divide-slate-200">
+            {users.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-slate-500">No users yet.</div>
+            ) : (
+              users.map((user) => (
+                <div key={user.id} className="grid grid-cols-6 gap-4 px-4 py-3 text-sm">
+                  <div className="col-span-2 text-slate-900">{user.email}</div>
+                  <div className="text-slate-700">{user.role}</div>
+                  <div className="text-slate-500">{user.mustChangePassword ? "Yes" : "No"}</div>
+                  <div className="text-slate-500">{user.createdAtLabel}</div>
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(user.id)}
+                      className="text-sm font-medium text-red-600 hover:text-red-700"
+                      disabled={deletingId === user.id}
+                    >
+                      {deletingId === user.id ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
       {message ? <p className="px-4 py-3 text-sm text-emerald-600">{message}</p> : null}
       {error ? <p className="px-4 py-3 text-sm text-red-600">{error}</p> : null}

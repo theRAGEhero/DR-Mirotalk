@@ -27,7 +27,9 @@ Email is sent via SMTP using `.env` values. If SMTP is not configured, the app w
 ## Main routes
 
 - `/login`
+- `/register`
 - `/dashboard`
+- `/dataspace`
 - `/meetings/new`
 - `/meetings/[id]`
 - `/admin/users` (ADMIN only)

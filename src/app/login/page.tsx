@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import Link from "next/link";
 import { LoginForm } from "@/app/login/LoginForm";
 
 export default async function LoginPage() {
@@ -18,6 +19,9 @@ export default async function LoginPage() {
       <div className="mt-6">
         <LoginForm />
       </div>
+      <p className="mt-4 text-center text-xs text-slate-600">
+        New here? <Link href="/register" className="font-semibold">Create an account</Link>
+      </p>
     </div>
   );
 }

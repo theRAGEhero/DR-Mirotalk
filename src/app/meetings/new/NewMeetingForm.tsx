@@ -3,13 +3,21 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function NewMeetingForm() {
+type DataspaceOption = {
+  id: string;
+  name: string;
+};
+
+export function NewMeetingForm({ dataspaces }: { dataspaces: DataspaceOption[] }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [hasExpiry, setHasExpiry] = useState(true);
-  const [expiresInHours, setExpiresInHours] = useState(4);
+  const [date, setDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [language, setLanguage] = useState("EN");
   const [provider, setProvider] = useState("DEEPGRAM");
+  const [dataspaceId, setDataspaceId] = useState("");
+  const [inviteEmails, setInviteEmails] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,18 +31,29 @@ export function NewMeetingForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
-        hasExpiry,
-        expiresInHours: hasExpiry ? expiresInHours : undefined,
+        date: date || undefined,
+        startTime: startTime || undefined,
+        durationMinutes: durationMinutes || undefined,
+        inviteEmails: inviteEmails
+          .split(/[,\n]/)
+          .map((value) => value.trim())
+          .filter(Boolean),
         language,
-        transcriptionProvider: provider
+        transcriptionProvider: provider,
+        dataspaceId: dataspaceId || null
       })
     });
 
-    const data = await response.json();
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      data = null;
+    }
     setLoading(false);
 
     if (!response.ok) {
-      setError(data?.error?.formErrors?.[0] ?? "Unable to create meeting");
+      setError(data?.error?.formErrors?.[0] ?? data?.error ?? "Unable to create meeting");
       return;
     }
 
@@ -53,32 +72,42 @@ export function NewMeetingForm() {
         />
       </div>
 
-      <div className="flex items-center gap-3">
-        <input
-          id="hasExpiry"
-          type="checkbox"
-          checked={hasExpiry}
-          onChange={(event) => setHasExpiry(event.target.checked)}
-          className="h-4 w-4 rounded border-slate-300"
-        />
-        <label htmlFor="hasExpiry" className="text-sm text-slate-700">
-          Scade tra X ore
-        </label>
-      </div>
-
-      {hasExpiry ? (
+      <div className="grid gap-4 md:grid-cols-3">
         <div>
-          <label className="text-sm font-medium">Ore</label>
+          <label className="text-sm font-medium">Day (optional)</label>
           <input
-            type="number"
-            min={1}
-            max={168}
-            value={expiresInHours}
-            onChange={(event) => setExpiresInHours(Number(event.target.value))}
-            className="dr-input mt-1 w-32 rounded px-3 py-2 text-sm"
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
           />
         </div>
-      ) : null}
+        <div>
+          <label className="text-sm font-medium">Start time (optional)</label>
+          <input
+            type="time"
+            value={startTime}
+            onChange={(event) => setStartTime(event.target.value)}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Duration (optional)</label>
+          <select
+            value={durationMinutes}
+            onChange={(event) => setDurationMinutes(Number(event.target.value))}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          >
+            <option value={15}>15m</option>
+            <option value={30}>30m</option>
+            <option value={45}>45m</option>
+            <option value={60}>1h</option>
+            <option value={90}>1h 30m</option>
+            <option value={120}>2h</option>
+            <option value={150}>2h 30m</option>
+          </select>
+        </div>
+      </div>
 
       <div>
         <label className="text-sm font-medium">Language</label>
@@ -116,6 +145,34 @@ export function NewMeetingForm() {
           />
           Vosk (slow, privacy friendly)
         </label>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Dataspace (optional)</label>
+        <select
+          value={dataspaceId}
+          onChange={(event) => setDataspaceId(event.target.value)}
+          className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+        >
+          <option value="">No dataspace</option>
+          {dataspaces.map((space) => (
+            <option key={space.id} value={space.id}>
+              {space.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Invite users (optional)</label>
+        <textarea
+          value={inviteEmails}
+          onChange={(event) => setInviteEmails(event.target.value)}
+          className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          rows={3}
+          placeholder="email1@example.com, email2@example.com"
+        />
+        <p className="mt-1 text-xs text-slate-500">Separate emails with commas or new lines.</p>
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

@@ -3,6 +3,37 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { fetchRounds, fetchTranscription } from "@/lib/deepgram";
 
+async function pushTranscriptionPayload(options: {
+  groupId: string | null;
+  externalId: string;
+  transcription: unknown;
+}) {
+  const ingestBaseUrl = process.env.TRANSCRIPT_INGEST_URL;
+  if (!ingestBaseUrl) return;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  };
+
+  if (options.groupId) {
+    headers["x-group-id"] = options.groupId;
+  }
+
+  try {
+    await fetch(`${ingestBaseUrl}/api/ingest`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        external_id: options.externalId,
+        group_id: options.groupId ?? undefined,
+        payload: options.transcription
+      })
+    });
+  } catch (error) {
+    console.error("Transcript ingest push failed", error);
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
@@ -69,6 +100,11 @@ export async function GET(
 
   try {
     const transcription = await fetchTranscription(baseUrl, roundId);
+    void pushTranscriptionPayload({
+      groupId: meeting.dataspaceId ?? null,
+      externalId: roundId,
+      transcription
+    });
     return NextResponse.json({ transcription, roundId, provider });
   } catch (error) {
     return NextResponse.json(

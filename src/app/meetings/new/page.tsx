@@ -1,6 +1,18 @@
 import { NewMeetingForm } from "@/app/meetings/new/NewMeetingForm";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
-export default function NewMeetingPage() {
+export default async function NewMeetingPage() {
+  const session = await getServerSession(authOptions);
+  const dataspaces = session?.user
+    ? await prisma.dataspace.findMany({
+        where: { members: { some: { userId: session.user.id } } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true }
+      })
+    : [];
+
   return (
     <div className="max-w-lg space-y-4">
       <div>
@@ -10,7 +22,7 @@ export default function NewMeetingPage() {
         <p className="text-sm text-slate-500">Create a new MiroTalk room link.</p>
       </div>
       <div className="dr-card p-6">
-        <NewMeetingForm />
+        <NewMeetingForm dataspaces={dataspaces} />
       </div>
     </div>
   );

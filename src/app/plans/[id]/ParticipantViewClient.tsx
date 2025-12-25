@@ -14,6 +14,7 @@ type Props = {
   startAt: string;
   roundDurationMinutes: number;
   roundsCount: number;
+  syncMode: "SERVER" | "CLIENT";
   assignments: RoundAssignment[];
   baseUrl: string;
   userEmail: string;
@@ -30,20 +31,54 @@ export function ParticipantViewClient({
   startAt,
   roundDurationMinutes,
   roundsCount,
+  syncMode,
   assignments,
   baseUrl,
   userEmail
 }: Props) {
   const startTime = useMemo(() => new Date(startAt).getTime(), [startAt]);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number | null>(null);
+  const [offsetMs, setOffsetMs] = useState<number | null>(null);
 
   useEffect(() => {
+    setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (syncMode !== "SERVER") return;
+
+    let mounted = true;
+
+    async function syncServerTime() {
+      try {
+        const response = await fetch(`/api/plans/${planId}/current`);
+        if (!response.ok) return;
+        const payload = await response.json();
+        const serverNow = Date.parse(payload?.serverNow);
+        if (Number.isNaN(serverNow)) return;
+        if (mounted) {
+          setOffsetMs(serverNow - Date.now());
+        }
+      } catch (error) {
+        // keep local timing if server sync fails
+      }
+    }
+
+    syncServerTime();
+    const timer = setInterval(syncServerTime, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [planId, syncMode]);
+
   const roundDurationMs = roundDurationMinutes * 60 * 1000;
-  const elapsed = now - startTime;
+  const nowValue = now ?? startTime;
+  const effectiveNow =
+    syncMode === "SERVER" && offsetMs !== null ? nowValue + offsetMs : nowValue;
+  const elapsed = effectiveNow - startTime;
   const currentRoundIndex = Math.floor(elapsed / roundDurationMs) + 1;
 
   let status: "pending" | "active" | "done" = "pending";
@@ -56,7 +91,7 @@ export function ParticipantViewClient({
   const currentRound = Math.min(Math.max(currentRoundIndex, 1), roundsCount);
   const roundStart = startTime + (currentRound - 1) * roundDurationMs;
   const roundEnd = roundStart + roundDurationMs;
-  const secondsLeft = Math.max(0, Math.floor((roundEnd - now) / 1000));
+  const secondsLeft = Math.max(0, Math.floor((roundEnd - effectiveNow) / 1000));
 
   const assignment = assignments.find((item) => item.roundNumber === currentRound);
   const joinUrl = assignment && !assignment.isBreak
@@ -80,7 +115,7 @@ export function ParticipantViewClient({
           </p>
           {status === "pending" ? (
             <p className="text-sm text-slate-600">
-              Starts in {formatDuration(Math.max(0, Math.floor((startTime - now) / 1000)))}
+              Starts in {formatDuration(Math.max(0, Math.floor((startTime - effectiveNow) / 1000)))}
             </p>
           ) : null}
         </div>

@@ -14,10 +14,17 @@ export default async function PlanBuilderPage() {
     return <p className="text-sm text-slate-500">Access denied.</p>;
   }
 
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { id: true, email: true }
-  });
+  const [users, dataspaces] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true }
+    }),
+    prisma.dataspace.findMany({
+      where: { members: { some: { userId: session.user.id } } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true }
+    })
+  ]);
 
   return (
     <div className="space-y-6">
@@ -29,7 +36,7 @@ export default async function PlanBuilderPage() {
           Build a rotation plan and generate participant links.
         </p>
       </div>
-      <PlanBuilderClient users={users} />
+      <PlanBuilderClient users={users} dataspaces={dataspaces} />
     </div>
   );
 }

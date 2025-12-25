@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { formatDateTime, isMeetingActive } from "@/lib/utils";
 import { EmbedCall } from "@/app/meetings/[id]/EmbedCall";
 import { MeetingActions } from "@/app/meetings/[id]/MeetingActions";
-import { TranscriptionPanel } from "@/app/meetings/[id]/TranscriptionPanel";
+import { TranscriptionAutoLink } from "@/app/meetings/[id]/TranscriptionAutoLink";
+import { MeetingInviteActions } from "@/app/meetings/[id]/MeetingInviteActions";
 
 export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -29,9 +30,29 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
 
   const isAdmin = session.user.role === "ADMIN";
   const membership = meeting.members.find((member) => member.userId === session.user.id);
-  const canAccess = isAdmin || Boolean(membership);
+  const pendingInvite = await prisma.meetingInvite.findUnique({
+    where: {
+      meetingId_userId: {
+        meetingId: params.id,
+        userId: session.user.id
+      }
+    }
+  });
+
+  const canAccess = isAdmin || Boolean(membership) || pendingInvite?.status === "ACCEPTED";
 
   if (!canAccess) {
+    if (pendingInvite?.status === "PENDING") {
+      return (
+        <MeetingInviteActions
+          inviteId={pendingInvite.id}
+          meetingTitle={meeting.title}
+          hostEmail={
+            meeting.members.find((member) => member.role === "HOST")?.user.email ?? "Host"
+          }
+        />
+      );
+    }
     return <div className="text-sm text-slate-500">You do not have access to this meeting.</div>;
   }
 
@@ -45,14 +66,18 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
   )}&notify=0&lang=${langCode}&transcriber=${providerCode}`;
   const joinUrl = embedUrl;
 
+  const statusLabel = active ? "Active" : "Expired";
+  const languageLabel = meeting.language;
+  const providerLabel =
+    meeting.transcriptionProvider === "VOSK" ? "Vosk (privacy friendly)" : "Deepgram";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
             {meeting.title}
           </h1>
-          <p className="text-sm text-slate-500">Meeting room: {meeting.roomId}</p>
         </div>
         <Link
           href="/dashboard"
@@ -62,17 +87,29 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
         </Link>
       </div>
 
+      <EmbedCall
+        embedUrl={embedUrl}
+        isActive={active}
+        hasBaseUrl={Boolean(baseUrl)}
+        statusLabel={statusLabel}
+        languageLabel={languageLabel}
+        providerLabel={providerLabel}
+        joinUrl={joinUrl}
+        meetingId={meeting.id}
+        canManage={canManage}
+      />
+
       <div className="dr-card p-6">
-        <div className="grid gap-4 sm:grid-cols-4">
-          <div>
-            <p className="text-xs font-semibold uppercase text-slate-500">Status</p>
-            <p className={active ? "text-emerald-600" : "text-slate-400"}>
-              {active ? "Active" : "Expired"}
-            </p>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Expires</p>
             <p className="text-sm text-slate-700">{formatDateTime(meeting.expiresAt)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase text-slate-500">Starts</p>
+            <p className="text-sm text-slate-700">
+              {meeting.scheduledStartAt ? formatDateTime(meeting.scheduledStartAt) : "Not scheduled"}
+            </p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Host</p>
@@ -82,33 +119,14 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
             </p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase text-slate-500">Language</p>
-            <p className="text-sm text-slate-700">{meeting.language}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              {meeting.transcriptionProvider === "VOSK"
-                ? "Vosk (privacy friendly)"
-                : "Deepgram"}
-            </p>
+            <p className="text-xs font-semibold uppercase text-slate-500">Room</p>
+            <p className="text-sm text-slate-700 break-all">{meeting.roomId}</p>
           </div>
-        </div>
-        <div className="mt-6">
-          <a
-            href={joinUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`inline-flex items-center px-4 py-2 text-sm ${
-              active ? "dr-button" : "rounded bg-slate-300 px-4 py-2 text-sm font-semibold text-white"
-            }`}
-            aria-disabled={!active}
-          >
-            Join call
-          </a>
-          <EmbedCall embedUrl={embedUrl} isActive={active} hasBaseUrl={Boolean(baseUrl)} />
         </div>
       </div>
 
       <MeetingActions meetingId={meeting.id} canManage={canManage} isActive={meeting.isActive} />
-      <TranscriptionPanel
+      <TranscriptionAutoLink
         meetingId={meeting.id}
         canManage={canManage}
         initialRoundId={meeting.transcriptionRoundId}
