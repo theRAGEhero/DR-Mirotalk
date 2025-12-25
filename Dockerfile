@@ -18,10 +18,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3015
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3015
-CMD ["sh", "-c", "npx prisma db push && npm run start"]
+CMD ["./docker-entrypoint.sh"]

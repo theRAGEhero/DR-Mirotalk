@@ -111,14 +111,22 @@ export async function POST(request: Request) {
   });
 
   if (invitedUsers.length > 0) {
-    await prisma.meetingInvite.createMany({
-      data: invitedUsers.map((user) => ({
-        meetingId: meeting.id,
-        userId: user.id,
-        status: "PENDING"
-      })),
-      skipDuplicates: true
-    });
+    for (const user of invitedUsers) {
+      await prisma.meetingInvite.upsert({
+        where: {
+          meetingId_userId: {
+            meetingId: meeting.id,
+            userId: user.id
+          }
+        },
+        update: { status: "PENDING" },
+        create: {
+          meetingId: meeting.id,
+          userId: user.id,
+          status: "PENDING"
+        }
+      });
+    }
 
     const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
     await Promise.all(

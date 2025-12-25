@@ -58,7 +58,8 @@ export function DataspaceClient({ initialDataspaces, currentUserId, personalData
       description: description || null,
       createdByEmail: "You",
       members: [],
-      isPrivate: false
+      isPrivate: false,
+      meetingsCount: 0
     };
 
     setDataspaces((prev) => [newSpace, ...prev]);

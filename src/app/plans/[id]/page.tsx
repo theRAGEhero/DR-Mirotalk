@@ -90,7 +90,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
         startAt={plan.startAt.toISOString()}
         roundDurationMinutes={plan.roundDurationMinutes}
         roundsCount={plan.roundsCount}
-        syncMode={plan.syncMode}
+        syncMode={plan.syncMode === "CLIENT" ? "CLIENT" : "SERVER"}
         assignments={assignments}
         baseUrl={process.env.MIROTALK_BASE_URL || ""}
         userEmail={session.user.email}

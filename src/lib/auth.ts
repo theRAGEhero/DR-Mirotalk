@@ -17,7 +17,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials, _req) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) {
           return null;
@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user.id,
           email: user.email,
-          role: user.role,
+          role: user.role as "ADMIN" | "USER",
           mustChangePassword: user.mustChangePassword
         };
       }
@@ -69,6 +69,5 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login"
   },
-  secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true
+  secret: process.env.NEXTAUTH_SECRET
 };

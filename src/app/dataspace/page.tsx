@@ -10,6 +10,19 @@ export default async function DataspacePage() {
     return null;
   }
 
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true }
+  });
+
+  if (!currentUser) {
+    return (
+      <div className="text-sm text-slate-600">
+        Session is out of date. Please sign out and sign in again.
+      </div>
+    );
+  }
+
   const personalDataspace = await prisma.dataspace.findFirst({
     where: { personalOwnerId: session.user.id },
     include: {

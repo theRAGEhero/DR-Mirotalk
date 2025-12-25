@@ -13,6 +13,14 @@ services:
       DATABASE_URL: file:/data/dev.db
     volumes:
       - dr_mirotalk_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - dr-shared
 
 volumes:
   dr_mirotalk_data:
+
+networks:
+  dr-shared:
+    external: true

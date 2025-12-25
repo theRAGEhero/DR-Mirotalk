@@ -74,8 +74,11 @@ export async function GET(
 
   if (!roundId && auto) {
     const roundsResponse = await fetchRounds(baseUrl);
-    const rounds = Array.isArray(roundsResponse?.rounds) ? roundsResponse.rounds : [];
-    const matches = rounds.filter((round) => typeof round?.name === "string" && round.name.includes(meeting.roomId));
+    const rounds: Array<{ id?: string; name?: string; created_at?: string; status?: string }> =
+      Array.isArray(roundsResponse?.rounds) ? roundsResponse.rounds : [];
+    const matches = rounds.filter(
+      (round) => typeof round?.name === "string" && round.name.includes(meeting.roomId)
+    );
 
     const sorted = matches.sort((a, b) => {
       const aDate = new Date(a?.created_at ?? 0).getTime();
