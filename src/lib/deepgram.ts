@@ -1,15 +1,34 @@
-export async function fetchTranscription(baseUrl: string, roundId: string) {
+import { getBaseUrlCandidates } from "@/lib/transcription";
+
+async function requestWithFallback(baseUrl: string, path: string) {
   if (!baseUrl) {
     throw new Error("TRANSCRIPTION_BASE_URL is not configured");
   }
 
-  const response = await fetch(`${baseUrl}/api/rounds/${roundId}/transcription`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    cache: "no-store"
-  });
+  const candidates = getBaseUrlCandidates(baseUrl);
+  let lastError: unknown = null;
+
+  for (const candidate of candidates) {
+    try {
+      return await fetch(`${candidate}${path}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        cache: "no-store"
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Unable to reach transcription service");
+}
+
+export async function fetchTranscription(baseUrl: string, roundId: string) {
+  const response = await requestWithFallback(baseUrl, `/api/rounds/${roundId}/transcription`);
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
@@ -21,17 +40,7 @@ export async function fetchTranscription(baseUrl: string, roundId: string) {
 }
 
 export async function fetchRounds(baseUrl: string) {
-  if (!baseUrl) {
-    throw new Error("TRANSCRIPTION_BASE_URL is not configured");
-  }
-
-  const response = await fetch(`${baseUrl}/api/rounds`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    cache: "no-store"
-  });
+  const response = await requestWithFallback(baseUrl, "/api/rounds");
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));

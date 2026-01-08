@@ -4,6 +4,7 @@ import { createMeetingSchema } from "@/lib/validators";
 import { getSession } from "@/lib/session";
 import { generateRoomId } from "@/lib/utils";
 import { sendMail } from "@/lib/mailer";
+import { notifyDataspaceSubscribers } from "@/lib/dataspaceNotifications";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -19,13 +20,17 @@ export async function POST(request: Request) {
 
   const {
     title,
+    description,
     date,
     startTime,
     durationMinutes,
     inviteEmails,
     language,
     transcriptionProvider,
-    dataspaceId
+    dataspaceId,
+    isPublic,
+    requiresApproval,
+    capacity
   } = parsed.data;
   const providerLabel = transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram";
   const roomId = `${generateRoomId()}-${language}-${providerLabel}`;
@@ -65,6 +70,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid dataspace selection" }, { status: 403 });
     }
   }
+  if (isPublic && !dataspaceId) {
+    return NextResponse.json({ error: "Public meetings require a dataspace." }, { status: 400 });
+  }
 
   const emailList = (inviteEmails ?? [])
     .map((email) => email.trim().toLowerCase())
@@ -94,6 +102,7 @@ export async function POST(request: Request) {
   const meeting = await prisma.meeting.create({
     data: {
       title,
+      description: description || null,
       roomId,
       createdById: session.user.id,
       scheduledStartAt,
@@ -101,6 +110,9 @@ export async function POST(request: Request) {
       language,
       transcriptionProvider,
       dataspaceId: dataspaceId || null,
+      isPublic: Boolean(isPublic),
+      requiresApproval: Boolean(requiresApproval),
+      capacity: capacity ?? null,
       members: {
         create: {
           userId: session.user.id,
@@ -142,6 +154,20 @@ export async function POST(request: Request) {
     );
   }
 
+  if (meeting.dataspaceId) {
+    const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+    try {
+      await notifyDataspaceSubscribers({
+        dataspaceId: meeting.dataspaceId,
+        title: meeting.title,
+        link: `${appBaseUrl}/meetings/${meeting.id}`,
+        type: "MEETING"
+      });
+    } catch (error) {
+      console.error("Telegram notify failed", error);
+    }
+  }
+
   return NextResponse.json({ id: meeting.id });
 }
 
@@ -153,9 +179,16 @@ export async function GET() {
 
   const meetings = await prisma.meeting.findMany({
     where: {
+      isHidden: false,
       OR: [
         { createdById: session.user.id },
-        { members: { some: { userId: session.user.id } } }
+        { members: { some: { userId: session.user.id } } },
+        {
+          isPublic: true,
+          dataspace: {
+            members: { some: { userId: session.user.id } }
+          }
+        }
       ]
     },
     orderBy: { createdAt: "desc" },

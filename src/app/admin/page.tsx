@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { RegistrationSettings } from "@/app/admin/RegistrationSettings";
 
 export default async function AdminHomePage() {
   const session = await getServerSession(authOptions);
@@ -16,7 +17,7 @@ export default async function AdminHomePage() {
 
   const [usersCount, meetingsCount] = await Promise.all([
     prisma.user.count(),
-    prisma.meeting.count()
+    prisma.meeting.count({ where: { isHidden: false } })
   ]);
 
   return (
@@ -60,11 +61,10 @@ export default async function AdminHomePage() {
           <Link href="/plans/new" className="dr-button-outline px-4 py-2 text-sm text-center">
             Create plan
           </Link>
-          <Link href="/experiments/round-switch" className="dr-button-outline px-4 py-2 text-sm text-center">
-            Round switch experiment
-          </Link>
         </div>
       </div>
+
+      <RegistrationSettings />
     </div>
   );
 }

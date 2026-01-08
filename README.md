@@ -1,6 +1,6 @@
-# MiroTalk Manager
+# Democracy Routes
 
-Minimal full-stack app to manage access and links for MiroTalk SFU rooms (link + optional embed).
+Minimal full-stack app to manage access and links for Democracy Routes call rooms (link + optional embed).
 
 ## Local setup
 

@@ -15,7 +15,7 @@ export default async function GlobalDashboardPage() {
     return <p className="text-sm text-slate-500">Access denied.</p>;
   }
 
-  const [meetings, dataspaces] = await Promise.all([
+  const [meetings, dataspaces, plans, texts] = await Promise.all([
     prisma.meeting.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -26,10 +26,28 @@ export default async function GlobalDashboardPage() {
     prisma.dataspace.findMany({
       where: { isPrivate: false },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true }
+      select: { id: true, name: true, personalOwnerId: true }
+    }),
+    prisma.plan.findMany({
+      orderBy: { startAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        startAt: true,
+        roundsCount: true,
+        isPublic: true,
+        dataspace: { select: { id: true, name: true, personalOwnerId: true } }
+      }
+    }),
+    prisma.text.findMany({
+      orderBy: { updatedAt: "desc" },
+      include: {
+        dataspace: { select: { id: true, name: true, personalOwnerId: true } }
+      }
     })
   ]);
 
+  const now = new Date();
   const rows = meetings.map((meeting) => ({
     id: meeting.id,
     title: meeting.title,
@@ -45,6 +63,14 @@ export default async function GlobalDashboardPage() {
       meeting.dataspace?.personalOwnerId === session.user.id
         ? "personal"
         : meeting.dataspace?.id ?? "none",
+    isPublic: meeting.isPublic,
+    isHidden: meeting.isHidden,
+    isPast: Boolean(
+      (meeting.expiresAt && meeting.expiresAt < now) ||
+        (!meeting.expiresAt && meeting.scheduledStartAt && meeting.scheduledStartAt < now && !meeting.isActive)
+    ),
+    joinStatus: "NONE" as const,
+    canJoin: false,
     createdByEmail: meeting.createdBy.email,
     canDelete: true
   }));
@@ -55,15 +81,60 @@ export default async function GlobalDashboardPage() {
     ...dataspaces.map((dataspace) => ({ key: dataspace.id, label: dataspace.name }))
   ];
 
+  const planRows = plans.map((plan) => ({
+    id: plan.id,
+    title: plan.title,
+    startLabel: formatDateTime(plan.startAt),
+    startAtMs: plan.startAt.getTime(),
+    isPast: plan.startAt < now,
+    roundsCount: plan.roundsCount,
+    dataspaceLabel:
+      plan.dataspace?.personalOwnerId === session.user.id
+        ? "My Data Space"
+        : plan.dataspace?.name ?? "No dataspace",
+    dataspaceKey:
+      plan.dataspace?.personalOwnerId === session.user.id
+        ? "personal"
+        : plan.dataspace?.id ?? "none",
+    isPublic: plan.isPublic,
+    joinStatus: "NONE" as const,
+    canJoin: false
+  }));
+
+  const textRows = texts.map((text) => {
+    const snippet = text.content.trim().split("\n")[0]?.slice(0, 80) ?? "";
+    return {
+      id: text.id,
+      snippet,
+      updatedLabel: formatDateTime(text.updatedAt),
+      isPast: text.updatedAt < now,
+      dataspaceLabel:
+        text.dataspace?.personalOwnerId === session.user.id
+          ? "My Data Space"
+        : text.dataspace?.name ?? "Personal",
+      dataspaceKey:
+        text.dataspace?.personalOwnerId === session.user.id
+          ? "personal"
+          : text.dataspace?.id ?? "none"
+    };
+  });
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
           Global dashboard
         </h1>
-        <p className="text-sm text-slate-600">All meetings across the platform.</p>
+        <p className="text-sm text-slate-600">All meetings and plans across the platform.</p>
       </div>
-      <MeetingsTable initialMeetings={rows} dataspaceOptions={dataspaceOptions} showCreatedBy />
+      <MeetingsTable
+        initialMeetings={rows}
+        dataspaceOptions={dataspaceOptions}
+        plans={planRows}
+        texts={textRows}
+        showCreatedBy
+        showFlagFilters
+      />
     </div>
   );
 }

@@ -2,13 +2,17 @@ import { z } from "zod";
 
 export const createMeetingSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  description: z.string().max(240).optional().or(z.literal("")),
   date: z.string().optional(),
   startTime: z.string().optional(),
   durationMinutes: z.number().int().positive().optional(),
   inviteEmails: z.array(z.string().email("Invalid email")).optional(),
   language: z.enum(["EN", "IT"]).default("EN"),
   transcriptionProvider: z.enum(["DEEPGRAM", "VOSK"]).default("DEEPGRAM"),
-  dataspaceId: z.string().optional().nullable()
+  dataspaceId: z.string().optional().nullable(),
+  isPublic: z.boolean().optional().default(false),
+  requiresApproval: z.boolean().optional().default(false),
+  capacity: z.number().int().positive().optional().nullable()
 });
 
 export const inviteMemberSchema = z.object({
@@ -25,13 +29,37 @@ export const deactivateMeetingSchema = z.object({
 
 export const createPlanSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  description: z.string().max(240).optional().or(z.literal("")),
   startAt: z.string().min(1, "Start time is required"),
   roundDurationMinutes: z.number().int().positive().max(240),
   roundsCount: z.number().int().positive().max(100),
   participantIds: z.array(z.string().min(1)).min(2, "Select at least two participants"),
   syncMode: z.enum(["SERVER", "CLIENT"]).default("SERVER"),
   maxParticipantsPerRoom: z.number().int().min(2).max(12).default(2),
-  dataspaceId: z.string().optional().nullable()
+  dataspaceId: z.string().optional().nullable(),
+  language: z.enum(["EN", "IT"]).default("EN"),
+  transcriptionProvider: z.enum(["DEEPGRAM", "VOSK"]).default("DEEPGRAM"),
+  meditationEnabled: z.boolean().optional().default(false),
+  meditationAtStart: z.boolean().optional().default(false),
+  meditationBetweenRounds: z.boolean().optional().default(false),
+  meditationAtEnd: z.boolean().optional().default(false),
+  meditationDurationMinutes: z.number().int().min(1).max(15).default(5),
+  meditationAnimationId: z.string().optional().nullable(),
+  meditationAudioUrl: z.string().optional().nullable(),
+  isPublic: z.boolean().optional().default(false),
+  requiresApproval: z.boolean().optional().default(false),
+  capacity: z.number().int().positive().optional().nullable(),
+  blocks: z
+    .array(
+      z.object({
+        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT"]),
+        durationSeconds: z.number().int().min(1).max(7200),
+        posterId: z.string().optional().nullable(),
+        meditationAnimationId: z.string().optional().nullable(),
+        meditationAudioUrl: z.string().optional().nullable()
+      })
+    )
+    .optional()
 });
 
 export const createUserSchema = z.object({
@@ -39,11 +67,30 @@ export const createUserSchema = z.object({
   role: z.enum(["ADMIN", "USER"])
 });
 
+export const adminResetPasswordSchema = z
+  .object({
+    newPassword: z.string().min(12, "Minimum 12 characters"),
+    confirmPassword: z.string().min(12)
+  })
+  .refine((data) => /[a-zA-Z]/.test(data.newPassword), {
+    message: "Password must include at least one letter",
+    path: ["newPassword"]
+  })
+  .refine((data) => /[0-9]/.test(data.newPassword), {
+    message: "Password must include at least one number",
+    path: ["newPassword"]
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"]
+  });
+
 export const registerSchema = z
   .object({
     email: z.string().email("Invalid email"),
     password: z.string().min(12, "Minimum 12 characters"),
-    confirmPassword: z.string().min(12)
+    confirmPassword: z.string().min(12),
+    code: z.string().optional().or(z.literal(""))
   })
   .refine((data) => /[a-zA-Z]/.test(data.password), {
     message: "Password must include at least one letter",
@@ -87,5 +134,16 @@ export const profileSettingsSchema = z.object({
     .trim()
     .max(64, "Telegram handle is too long")
     .optional()
+    .or(z.literal("")),
+  calComLink: z
+    .string()
+    .trim()
+    .max(200, "Cal.com link is too long")
+    .optional()
     .or(z.literal(""))
+});
+
+export const changeEmailSchema = z.object({
+  email: z.string().trim().email("Invalid email"),
+  password: z.string().min(1, "Password is required")
 });

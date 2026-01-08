@@ -1,0 +1,28 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireWorkflowKey } from "@/app/api/integrations/workflow/utils";
+
+export async function GET(request: Request) {
+  const authError = requireWorkflowKey(request);
+  if (authError) return authError;
+
+  const url = new URL(request.url);
+  const dataspaceId = url.searchParams.get("dataspace_id");
+
+  if (!dataspaceId) {
+    return NextResponse.json({ error: "dataspace_id is required" }, { status: 400 });
+  }
+
+  const members = await prisma.dataspaceMember.findMany({
+    where: { dataspaceId },
+    include: { user: { select: { id: true, email: true } } },
+    orderBy: { createdAt: "asc" }
+  });
+
+  return NextResponse.json({
+    users: members.map((member) => ({
+      id: member.user.id,
+      email: member.user.email
+    }))
+  });
+}

@@ -21,6 +21,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
     include: {
       members: {
         where: { userId: session.user.id }
+      },
+      dataspace: {
+        include: { members: { select: { userId: true } } }
       }
     }
   });
@@ -31,8 +34,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const isAdmin = session.user.role === "ADMIN";
   const isHost = meeting.members.some((member) => member.role === "HOST");
+  const isDataspaceMember = meeting.dataspace
+    ? meeting.dataspace.members.some((member) => member.userId === session.user.id)
+    : false;
 
-  if (!isAdmin && !isHost) {
+  if (!isAdmin && !isHost && !(meeting.isPublic && isDataspaceMember)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -41,7 +47,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
   });
 
   if (!invitee) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "User not found", canInviteGuest: true },
+      { status: 404 }
+    );
   }
 
   const existing = await prisma.meetingMember.findUnique({

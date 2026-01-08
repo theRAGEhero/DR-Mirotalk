@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ChangePasswordForm } from "@/app/account/change-password/ChangePasswordForm";
 import { ProfileSettingsForm } from "@/app/account/ProfileSettingsForm";
+import { ChangeEmailForm } from "@/app/account/ChangeEmailForm";
 
 export default async function AccountSettingsPage() {
   const session = await getServerSession(authOptions);
@@ -13,7 +14,7 @@ export default async function AccountSettingsPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { telegramHandle: true }
+    select: { telegramHandle: true, calComLink: true, email: true }
   });
 
   return (
@@ -27,11 +28,18 @@ export default async function AccountSettingsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="dr-card p-6">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Notifications</h2>
-          <ProfileSettingsForm initialTelegramHandle={user?.telegramHandle ?? ""} />
+          <ProfileSettingsForm
+            initialTelegramHandle={user?.telegramHandle ?? ""}
+            initialCalComLink={user?.calComLink ?? ""}
+          />
         </div>
         <div className="dr-card p-6">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Security</h2>
           <ChangePasswordForm />
+        </div>
+        <div className="dr-card p-6">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Email</h2>
+          <ChangeEmailForm currentEmail={user?.email ?? session.user.email} />
         </div>
       </div>
     </div>

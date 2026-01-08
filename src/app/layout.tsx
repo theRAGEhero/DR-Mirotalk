@@ -8,8 +8,8 @@ const sans = Space_Grotesk({ subsets: ["latin"], variable: "--font-sans" });
 const serif = Fraunces({ subsets: ["latin"], variable: "--font-serif" });
 
 export const metadata: Metadata = {
-  title: "MiroTalk Manager",
-  description: "Manage MiroTalk SFU meeting links"
+  title: "Democracy Routes",
+  description: "Manage Democracy Routes meeting links"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -23,10 +23,21 @@ export async function POST(request: Request) {
   }
 
   const telegramHandle = normalizeTelegramHandle(parsed.data.telegramHandle ?? null);
+  const calComLink = parsed.data.calComLink?.trim() || null;
+
+  const existing = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { telegramHandle: true }
+  });
 
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { telegramHandle }
+    data: {
+      telegramHandle,
+      calComLink,
+      telegramChatId:
+        existing?.telegramHandle !== telegramHandle ? null : undefined
+    }
   });
 
   return NextResponse.json({ message: "Profile updated" });

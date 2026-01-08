@@ -1,0 +1,164 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { requireWorkflowKey } from "@/app/api/integrations/workflow/utils";
+import { generateRoomId } from "@/lib/utils";
+import { sendMail } from "@/lib/mailer";
+
+const createWorkflowMeetingSchema = z.object({
+  title: z.string().min(1),
+  date: z.string().optional(),
+  start_time: z.string().optional(),
+  duration_minutes: z.number().int().positive().optional(),
+  invite_emails: z.array(z.string().email()).optional(),
+  language: z.enum(["EN", "IT"]).default("EN"),
+  transcription_provider: z.enum(["DEEPGRAM", "VOSK"]).default("DEEPGRAM"),
+  dataspace_id: z.string().optional().nullable(),
+  created_by_email: z.string().email().optional()
+});
+
+export async function POST(request: Request) {
+  const authError = requireWorkflowKey(request);
+  if (authError) return authError;
+
+  const body = await request.json().catch(() => null);
+  const parsed = createWorkflowMeetingSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const {
+    title,
+    date,
+    start_time: startTime,
+    duration_minutes: durationMinutes,
+    invite_emails: inviteEmails,
+    language,
+    transcription_provider: transcriptionProvider,
+    dataspace_id: dataspaceId,
+    created_by_email: createdByEmail
+  } = parsed.data;
+
+  const providerLabel = transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram";
+  const roomId = `${generateRoomId()}-${language}-${providerLabel}`;
+  let scheduledStartAt: Date | null = null;
+  let expiresAt: Date | null = null;
+
+  if (startTime && !date) {
+    return NextResponse.json({ error: "Select a date for the start time." }, { status: 400 });
+  }
+
+  if (date && startTime) {
+    const start = new Date(`${date}T${startTime}`);
+    if (Number.isNaN(start.getTime())) {
+      return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
+    }
+    scheduledStartAt = start;
+  }
+
+  if (durationMinutes) {
+    if (scheduledStartAt) {
+      expiresAt = new Date(scheduledStartAt.getTime() + durationMinutes * 60 * 1000);
+    } else {
+      expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
+    }
+  }
+
+  const creator = createdByEmail
+    ? await prisma.user.findUnique({ where: { email: createdByEmail } })
+    : await prisma.user.findFirst({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" } });
+
+  if (!creator) {
+    return NextResponse.json({ error: "Creator not found" }, { status: 404 });
+  }
+
+  if (dataspaceId) {
+    const dataspace = await prisma.dataspace.findUnique({
+      where: { id: dataspaceId },
+      select: { id: true }
+    });
+    if (!dataspace) {
+      return NextResponse.json({ error: "Dataspace not found" }, { status: 404 });
+    }
+  }
+
+  const emailList = (inviteEmails ?? [])
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+  const uniqueEmails = Array.from(new Set(emailList)).filter(
+    (email) => email !== creator.email.toLowerCase()
+  );
+
+  let invitedUsers: Array<{ id: string; email: string }> = [];
+  if (uniqueEmails.length > 0) {
+    invitedUsers = await prisma.user.findMany({
+      where: { email: { in: uniqueEmails } },
+      select: { id: true, email: true }
+    });
+
+    if (invitedUsers.length !== uniqueEmails.length) {
+      const found = new Set(invitedUsers.map((user) => user.email));
+      const missing = uniqueEmails.filter((email) => !found.has(email));
+      return NextResponse.json(
+        { error: `Users not found: ${missing.join(", ")}` },
+        { status: 404 }
+      );
+    }
+  }
+
+  const meeting = await prisma.meeting.create({
+    data: {
+      title,
+      roomId,
+      createdById: creator.id,
+      scheduledStartAt,
+      expiresAt,
+      language,
+      transcriptionProvider,
+      dataspaceId: dataspaceId || null,
+      members: {
+        create: {
+          userId: creator.id,
+          role: "HOST"
+        }
+      }
+    }
+  });
+
+  if (invitedUsers.length > 0) {
+    for (const user of invitedUsers) {
+      await prisma.meetingInvite.upsert({
+        where: {
+          meetingId_userId: {
+            meetingId: meeting.id,
+            userId: user.id
+          }
+        },
+        update: { status: "PENDING" },
+        create: {
+          meetingId: meeting.id,
+          userId: user.id,
+          status: "PENDING"
+        }
+      });
+    }
+
+    const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3015";
+    await Promise.all(
+      invitedUsers.map((user) =>
+        sendMail({
+          to: user.email,
+          subject: "You are invited to a meeting",
+          html: `<p>You have been invited to the meeting <strong>${meeting.title}</strong>.</p>
+            <p>Open the meeting page: <a href="${appBaseUrl}/meetings/${meeting.id}">${appBaseUrl}/meetings/${meeting.id}</a></p>`,
+          text: `You have been invited to the meeting ${meeting.title}. Open: ${appBaseUrl}/meetings/${meeting.id}`
+        })
+      )
+    );
+  }
+
+  return NextResponse.json({
+    meeting_id: meeting.id,
+    meeting_url: `${process.env.APP_BASE_URL || "http://localhost:3015"}/meetings/${meeting.id}`
+  });
+}

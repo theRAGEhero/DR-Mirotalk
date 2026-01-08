@@ -26,7 +26,13 @@ export function TranscriptionPanel({ meetingId, canManage, initialRoundId }: Pro
       method: "GET"
     });
 
-    const payload = await response.json();
+    const text = await response.text();
+    let payload: any = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch (parseError) {
+      payload = null;
+    }
     setLoading(false);
 
     if (!response.ok) {

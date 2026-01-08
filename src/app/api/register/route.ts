@@ -10,6 +10,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const settings =
+    (await prisma.registrationSettings.findFirst()) ??
+    (await prisma.registrationSettings.create({ data: {} }));
+
+  if (!settings.registrationOpen) {
+    return NextResponse.json({ error: "Registration is closed" }, { status: 403 });
+  }
+
+  const code = parsed.data.code?.trim() || "";
+  if (settings.requireCode) {
+    if (!code) {
+      return NextResponse.json({ error: "Registration code required" }, { status: 400 });
+    }
+    const validCode = await prisma.registrationCode.findFirst({
+      where: { code, enabled: true }
+    });
+    if (!validCode) {
+      return NextResponse.json({ error: "Invalid registration code" }, { status: 400 });
+    }
+  }
+
   const existing = await prisma.user.findUnique({
     where: { email: parsed.data.email }
   });
