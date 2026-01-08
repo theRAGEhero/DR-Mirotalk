@@ -1,9 +1,9 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { CreateUserForm } from "@/app/admin/users/CreateUserForm";
 import { UsersTable } from "@/app/admin/users/UsersTable";
 import { formatDateTime } from "@/lib/utils";
+import { CreateUserModal } from "@/app/admin/users/CreateUserModal";
 
 export default async function AdminUsersPage() {
   const session = await getServerSession(authOptions);
@@ -17,7 +17,15 @@ export default async function AdminUsersPage() {
   }
 
   const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" }
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      mustChangePassword: true,
+      createdAt: true,
+      _count: { select: { memberships: true } }
+    }
   });
 
   const rows = users.map((user) => ({
@@ -25,7 +33,8 @@ export default async function AdminUsersPage() {
     email: user.email,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
-    createdAtLabel: formatDateTime(user.createdAt)
+    createdAtLabel: formatDateTime(user.createdAt),
+    meetingsCount: user._count.memberships
   }));
 
   return (
@@ -37,17 +46,12 @@ export default async function AdminUsersPage() {
         <p className="text-sm text-slate-500">Manage platform users.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-        <UsersTable initialUsers={rows} />
-
-        <div className="dr-card p-6">
-          <h2 className="text-lg font-semibold text-slate-900">Create user</h2>
-          <p className="text-sm text-slate-500">Invite a new account.</p>
-          <div className="mt-4">
-            <CreateUserForm />
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">All registered users.</p>
+        <CreateUserModal />
       </div>
+
+      <UsersTable initialUsers={rows} />
     </div>
   );
 }

@@ -111,7 +111,7 @@ export function EmbedCall({
       >
         {showEmbed && isActive ? (
           <iframe
-            title="MiroTalk call"
+            title="Call"
             src={embedUrl}
             className={`w-full ${showModal ? "flex-1" : "h-[360px] sm:h-[520px]"}`}
             allow="camera; microphone; fullscreen"
@@ -143,7 +143,7 @@ export function EmbedCall({
               }`}
               aria-disabled={!isActive}
             >
-              Join on MiroTalk
+              Join call
             </a>
             {canManage ? (
               <button

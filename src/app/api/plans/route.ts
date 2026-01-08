@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { createPlanSchema } from "@/lib/validators";
+import { notifyDataspaceSubscribers } from "@/lib/dataspaceNotifications";
 import crypto from "crypto";
 
 function generateRoomId() {
@@ -27,6 +28,60 @@ function rotate(userIds: string[]) {
   const last = rest.pop();
   if (!last) return userIds;
   return [first, last, ...rest];
+}
+
+type BlockInput = {
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+  durationSeconds: number;
+  posterId?: string | null;
+  meditationAnimationId?: string | null;
+  meditationAudioUrl?: string | null;
+};
+
+function buildDefaultBlocks(data: {
+  roundsCount: number;
+  roundDurationMinutes: number;
+  meditationEnabled: boolean;
+  meditationAtStart: boolean;
+  meditationBetweenRounds: boolean;
+  meditationAtEnd: boolean;
+  meditationDurationMinutes: number;
+}) {
+  const blocks: BlockInput[] = [];
+  const roundDurationSeconds = data.roundDurationMinutes * 60;
+  const meditationDurationSeconds = data.meditationDurationMinutes * 60;
+
+  if (data.meditationEnabled && data.meditationAtStart) {
+    blocks.push({
+      type: "MEDITATION",
+      durationSeconds: meditationDurationSeconds,
+      meditationAnimationId: data.meditationAnimationId ?? null,
+      meditationAudioUrl: data.meditationAudioUrl ?? null
+    });
+  }
+
+  for (let round = 1; round <= data.roundsCount; round += 1) {
+    blocks.push({ type: "ROUND", durationSeconds: roundDurationSeconds });
+    if (data.meditationEnabled && data.meditationBetweenRounds && round < data.roundsCount) {
+      blocks.push({
+        type: "MEDITATION",
+        durationSeconds: meditationDurationSeconds,
+        meditationAnimationId: data.meditationAnimationId ?? null,
+        meditationAudioUrl: data.meditationAudioUrl ?? null
+      });
+    }
+  }
+
+  if (data.meditationEnabled && data.meditationAtEnd) {
+    blocks.push({
+      type: "MEDITATION",
+      durationSeconds: meditationDurationSeconds,
+      meditationAnimationId: data.meditationAnimationId ?? null,
+      meditationAudioUrl: data.meditationAudioUrl ?? null
+    });
+  }
+
+  return blocks;
 }
 
 export async function POST(request: Request) {
@@ -68,15 +123,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Dataspace not found" }, { status: 404 });
     }
   }
+  if (parsed.data.isPublic && !parsed.data.dataspaceId) {
+    return NextResponse.json({ error: "Public plans require a dataspace." }, { status: 400 });
+  }
 
   const maxParticipantsPerRoom = parsed.data.maxParticipantsPerRoom;
+  const blocksInput =
+    parsed.data.blocks && parsed.data.blocks.length > 0
+      ? parsed.data.blocks
+      : buildDefaultBlocks(parsed.data);
+  const roundBlocks = blocksInput.filter((block) => block.type === "ROUND");
+  const missingPoster = blocksInput.some(
+    (block) => block.type === "POSTER" && !block.posterId
+  );
+
+  if (roundBlocks.length < 1) {
+    return NextResponse.json({ error: "Add at least one round block." }, { status: 400 });
+  }
+  if (missingPoster) {
+    return NextResponse.json({ error: "Select a poster for every poster block." }, { status: 400 });
+  }
+
+  const posterIds = Array.from(
+    new Set(
+      blocksInput
+        .map((block) => block.posterId)
+        .filter((posterId): posterId is string => Boolean(posterId))
+    )
+  );
+  if (posterIds.length > 0) {
+    const posters = await prisma.poster.findMany({
+      where: { id: { in: posterIds } },
+      select: { id: true }
+    });
+    if (posters.length !== posterIds.length) {
+      return NextResponse.json({ error: "Poster not found." }, { status: 404 });
+    }
+  }
+
   let rotation = users.map((user) => user.id);
   const roundsData = [] as Array<{
     roundNumber: number;
     pairs: Array<{ userAId: string; userBId: string | null; roomId: string }>;
   }>;
 
-  for (let i = 0; i < parsed.data.roundsCount; i += 1) {
+  for (let i = 0; i < roundBlocks.length; i += 1) {
     const groups = makeGroups(rotation, maxParticipantsPerRoom);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId();
@@ -99,16 +190,48 @@ export async function POST(request: Request) {
     rotation = rotate(rotation);
   }
 
+  let roundCounter = 0;
+  const blocksData = blocksInput.map((block, index) => {
+    if (block.type === "ROUND") {
+      roundCounter += 1;
+    }
+    return {
+      orderIndex: index,
+      type: block.type,
+      durationSeconds: block.durationSeconds,
+      posterId: block.posterId ?? null,
+      meditationAnimationId: block.meditationAnimationId ?? null,
+      meditationAudioUrl: block.meditationAudioUrl ?? null,
+      roundNumber: block.type === "ROUND" ? roundCounter : null
+    };
+  });
+  const firstRoundSeconds = roundBlocks[0]?.durationSeconds ?? 600;
+  const firstMeditationBlock = blocksInput.find((block) => block.type === "MEDITATION");
+  const firstMeditationSeconds = firstMeditationBlock?.durationSeconds ?? 300;
+
   const plan = await prisma.plan.create({
     data: {
       title: parsed.data.title,
+      description: parsed.data.description || null,
       createdById: session.user.id,
       dataspaceId: parsed.data.dataspaceId ?? null,
       startAt,
-      roundDurationMinutes: parsed.data.roundDurationMinutes,
-      roundsCount: parsed.data.roundsCount,
+      roundDurationMinutes: Math.max(1, Math.round(firstRoundSeconds / 60)),
+      roundsCount: roundBlocks.length,
       syncMode: parsed.data.syncMode,
       maxParticipantsPerRoom,
+      language: parsed.data.language,
+      transcriptionProvider: parsed.data.transcriptionProvider,
+      meditationEnabled: blocksInput.some((block) => block.type === "MEDITATION"),
+      meditationAtStart: false,
+      meditationBetweenRounds: false,
+      meditationAtEnd: false,
+      meditationDurationMinutes: Math.max(1, Math.round(firstMeditationSeconds / 60)),
+      meditationAnimationId: firstMeditationBlock?.meditationAnimationId ?? null,
+      meditationAudioUrl: firstMeditationBlock?.meditationAudioUrl ?? null,
+      isPublic: Boolean(parsed.data.isPublic),
+      requiresApproval: Boolean(parsed.data.requiresApproval),
+      capacity: parsed.data.capacity ?? null,
       rounds: {
         create: roundsData.map((round) => ({
           roundNumber: round.roundNumber,
@@ -120,9 +243,26 @@ export async function POST(request: Request) {
             }))
           }
         }))
+      },
+      blocks: {
+        create: blocksData
       }
     }
   });
+
+  if (plan.dataspaceId) {
+    const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+    try {
+      await notifyDataspaceSubscribers({
+        dataspaceId: plan.dataspaceId,
+        title: plan.title,
+        link: `${appBaseUrl}/plans/${plan.id}`,
+        type: "PLAN"
+      });
+    } catch (error) {
+      console.error("Telegram notify failed", error);
+    }
+  }
 
   return NextResponse.json({ id: plan.id });
 }

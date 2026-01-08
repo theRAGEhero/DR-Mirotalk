@@ -12,7 +12,7 @@ export default async function DataspacePage() {
 
   const currentUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true }
+    select: { id: true, telegramHandle: true }
   });
 
   if (!currentUser) {
@@ -23,16 +23,26 @@ export default async function DataspacePage() {
     );
   }
 
-  const personalDataspace = await prisma.dataspace.findFirst({
+  const [personalDataspace, subscriptions] = await Promise.all([
+    prisma.dataspace.findFirst({
     where: { personalOwnerId: session.user.id },
     include: {
       createdBy: { select: { email: true } },
       members: {
         include: { user: { select: { email: true } } }
       },
-      meetings: { select: { id: true } }
+      meetings: { where: { isHidden: false }, select: { id: true } },
+      plans: { select: { id: true } },
+      texts: { select: { id: true } }
     }
-  });
+  }),
+    prisma.dataspaceSubscription.findMany({
+      where: { userId: session.user.id },
+      select: { dataspaceId: true }
+    })
+  ]);
+
+  const subscribedIds = new Set(subscriptions.map((sub) => sub.dataspaceId));
 
   const ensuredPersonal =
     personalDataspace ??
@@ -54,19 +64,21 @@ export default async function DataspacePage() {
         members: {
           include: { user: { select: { email: true } } }
         },
-        meetings: { select: { id: true } }
+        meetings: { where: { isHidden: false }, select: { id: true } }
       }
     }));
 
   const dataspaces = await prisma.dataspace.findMany({
-    where: { isPrivate: false },
+    where: { isPrivate: false, personalOwnerId: null },
     orderBy: { createdAt: "desc" },
     include: {
       createdBy: { select: { email: true } },
       members: {
         include: { user: { select: { email: true } } }
       },
-      meetings: { select: { id: true } }
+      meetings: { where: { isHidden: false }, select: { id: true } },
+      plans: { select: { id: true } },
+      texts: { select: { id: true } }
     }
   });
 
@@ -80,8 +92,13 @@ export default async function DataspacePage() {
       email: member.user.email
     })),
     isPrivate: space.isPrivate,
-    meetingsCount: space.meetings.length
+    meetingsCount: space.meetings.length,
+    plansCount: space.plans.length,
+    textsCount: space.texts.length,
+    isSubscribed: subscribedIds.has(space.id)
   }));
+
+  const isAdmin = session.user.role === "ADMIN";
 
   return (
     <div className="space-y-6">
@@ -96,6 +113,8 @@ export default async function DataspacePage() {
       <DataspaceClient
         initialDataspaces={payload}
         currentUserId={session.user.id}
+        isAdmin={isAdmin}
+        hasTelegramHandle={Boolean(currentUser.telegramHandle)}
         personalDataspace={{
           id: ensuredPersonal.id,
           name: ensuredPersonal.name,
@@ -106,7 +125,10 @@ export default async function DataspacePage() {
             email: member.user.email
           })),
           isPrivate: ensuredPersonal.isPrivate,
-          meetingsCount: ensuredPersonal.meetings.length
+          meetingsCount: ensuredPersonal.meetings.length,
+          plansCount: ensuredPersonal.plans.length,
+          textsCount: ensuredPersonal.texts.length,
+          isSubscribed: subscribedIds.has(ensuredPersonal.id)
         }}
       />
     </div>

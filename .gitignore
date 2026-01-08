@@ -15,6 +15,7 @@ pnpm-debug.log*
 *.db
 *.sqlite
 prisma/dev.db
+data/meditation-audio/
 
 .DS_Store
 Thumbs.db

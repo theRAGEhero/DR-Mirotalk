@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/utils";
 import { DataspaceJoinLeave } from "@/app/dataspace/[id]/DataspaceJoinLeave";
+import { DataspaceInviteForm } from "@/app/dataspace/[id]/DataspaceInviteForm";
+import { JoinButton } from "@/components/JoinButton";
 
 export default async function DataspaceDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -12,15 +14,49 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
     return null;
   }
 
-  const dataspace = await prisma.dataspace.findUnique({
-    where: { id: params.id },
-    include: {
-      createdBy: { select: { email: true } },
-      members: { include: { user: { select: { email: true } } } },
-      meetings: { orderBy: { createdAt: "desc" } },
-      plans: { orderBy: { startAt: "desc" } }
-    }
-  });
+  const [dataspace, currentUser, subscription, meetingMembers, meetingInvites, planParticipants, planPairs] =
+    await Promise.all([
+    prisma.dataspace.findUnique({
+      where: { id: params.id },
+      include: {
+        createdBy: { select: { email: true } },
+        members: { include: { user: { select: { email: true } } } },
+        meetings: { where: { isHidden: false }, orderBy: { createdAt: "desc" } },
+        plans: { orderBy: { startAt: "desc" } },
+        texts: { orderBy: { updatedAt: "desc" } }
+      }
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { telegramHandle: true }
+    }),
+    prisma.dataspaceSubscription.findUnique({
+      where: {
+        dataspaceId_userId: {
+          dataspaceId: params.id,
+          userId: session.user.id
+        }
+      }
+    }),
+    prisma.meetingMember.findMany({
+      where: { userId: session.user.id },
+      select: { meetingId: true }
+    }),
+    prisma.meetingInvite.findMany({
+      where: { userId: session.user.id, status: "PENDING" },
+      select: { meetingId: true }
+    }),
+    prisma.planParticipant.findMany({
+      where: { userId: session.user.id },
+      select: { planId: true, status: true }
+    }),
+    prisma.planPair.findMany({
+      where: {
+        OR: [{ userAId: session.user.id }, { userBId: session.user.id }]
+      },
+      select: { planRound: { select: { planId: true } } }
+    })
+  ]);
 
   if (!dataspace) {
     return <p className="text-sm text-slate-600">Dataspace not found.</p>;
@@ -30,10 +66,17 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
   const isAdmin = session.user.role === "ADMIN";
   const isOwner =
     dataspace.personalOwnerId === session.user.id || dataspace.createdById === session.user.id;
+  const canInvite = isAdmin || isOwner;
 
   if (!isAdmin && !isMember) {
     return <p className="text-sm text-slate-600">Access denied.</p>;
   }
+
+  const now = new Date();
+  const upcomingMeetings = dataspace.meetings.filter(
+    (meeting) => meeting.scheduledStartAt && meeting.scheduledStartAt > now
+  );
+  const upcomingPlans = dataspace.plans.filter((plan) => plan.startAt > now);
 
   return (
     <div className="space-y-6">
@@ -54,6 +97,8 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
             isAdmin={isAdmin}
             isPrivate={dataspace.isPrivate}
             isOwner={isOwner}
+            isSubscribed={Boolean(subscription)}
+            hasTelegramHandle={Boolean(currentUser?.telegramHandle)}
           />
           <Link href="/dataspace" className="text-sm font-medium text-slate-600 hover:text-slate-900">
             Back to dataspaces
@@ -63,26 +108,114 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
 
       <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
         <div className="dr-card p-6">
+          <h2 className="text-sm font-semibold uppercase text-slate-500">Upcoming</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p className="text-xs font-semibold uppercase text-slate-500">Calls</p>
+              {upcomingMeetings.length === 0 ? (
+                <p className="text-slate-500">No upcoming calls.</p>
+              ) : (
+                upcomingMeetings.map((meeting) => {
+                  const joinStatus =
+                    meeting.createdById === session.user.id || meetingMemberIds.has(meeting.id)
+                      ? "JOINED"
+                      : meetingInviteIds.has(meeting.id)
+                        ? "PENDING"
+                        : "NONE";
+                  return (
+                    <div key={meeting.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
+                      <div>
+                        <p className="font-medium text-slate-900">{meeting.title}</p>
+                        <p className="text-xs text-slate-500">{formatDateTime(meeting.scheduledStartAt)}</p>
+                      </div>
+                      {meeting.isPublic ? (
+                        <JoinButton
+                          resourceType="meeting"
+                          resourceId={meeting.id}
+                          initialStatus={joinStatus}
+                          canJoin={true}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="space-y-2 text-sm text-slate-700">
+              <p className="text-xs font-semibold uppercase text-slate-500">Plans</p>
+              {upcomingPlans.length === 0 ? (
+                <p className="text-slate-500">No upcoming plans.</p>
+              ) : (
+                upcomingPlans.map((plan) => {
+                  const joinStatus =
+                    plan.createdById === session.user.id || planPairIds.has(plan.id)
+                      ? "JOINED"
+                      : planParticipantMap.get(plan.id) === "PENDING"
+                        ? "PENDING"
+                        : planParticipantMap.get(plan.id) === "APPROVED"
+                          ? "JOINED"
+                          : "NONE";
+                  return (
+                    <div key={plan.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
+                      <div>
+                        <p className="font-medium text-slate-900">{plan.title}</p>
+                        <p className="text-xs text-slate-500">{formatDateTime(plan.startAt)}</p>
+                      </div>
+                      {plan.isPublic ? (
+                        <JoinButton
+                          resourceType="plan"
+                          resourceId={plan.id}
+                          initialStatus={joinStatus}
+                          canJoin={true}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6 border-t border-slate-200 pt-6">
           <h2 className="text-sm font-semibold uppercase text-slate-500">Meetings</h2>
           <div className="mt-3 space-y-3 text-sm text-slate-700">
             {dataspace.meetings.length === 0 ? (
               <p className="text-slate-500">No meetings yet.</p>
             ) : (
-              dataspace.meetings.map((meeting) => (
-                <div key={meeting.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
-                  <div>
-                    <p className="font-medium text-slate-900">{meeting.title}</p>
-                    <p className="text-xs text-slate-500">{formatDateTime(meeting.createdAt)}</p>
+              dataspace.meetings.map((meeting) => {
+                const joinStatus =
+                  meeting.createdById === session.user.id || meetingMemberIds.has(meeting.id)
+                    ? "JOINED"
+                    : meetingInviteIds.has(meeting.id)
+                      ? "PENDING"
+                      : "NONE";
+                return (
+                  <div key={meeting.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
+                    <div>
+                      <p className="font-medium text-slate-900">{meeting.title}</p>
+                      <p className="text-xs text-slate-500">{formatDateTime(meeting.createdAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {meeting.isPublic ? (
+                        <JoinButton
+                          resourceType="meeting"
+                          resourceId={meeting.id}
+                          initialStatus={joinStatus}
+                          canJoin={true}
+                        />
+                      ) : null}
+                      <Link
+                        href={`/meetings/${meeting.id}`}
+                        className="text-xs font-semibold text-slate-700 hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </div>
                   </div>
-                  <Link
-                    href={`/meetings/${meeting.id}`}
-                    className="text-xs font-semibold text-slate-700 hover:underline"
-                  >
-                    Open
-                  </Link>
-                </div>
-              ))
+                );
+              })
             )}
+          </div>
           </div>
         </div>
 
@@ -102,20 +235,37 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
             </div>
           </div>
 
+          {canInvite ? (
+            <div className="dr-card p-6">
+              <h2 className="text-sm font-semibold uppercase text-slate-500">Invite members</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Invite registered users by email.
+              </p>
+              <div className="mt-4">
+                <DataspaceInviteForm
+                  dataspaceId={dataspace.id}
+                  existingEmails={dataspace.members.map((member) => member.user.email)}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="dr-card p-6">
-            <h2 className="text-sm font-semibold uppercase text-slate-500">Plans</h2>
+            <h2 className="text-sm font-semibold uppercase text-slate-500">Text notes</h2>
             <div className="mt-3 space-y-3 text-sm text-slate-700">
-              {dataspace.plans.length === 0 ? (
-                <p className="text-slate-500">No plans yet.</p>
+              {dataspace.texts.length === 0 ? (
+                <p className="text-slate-500">No text notes yet.</p>
               ) : (
-                dataspace.plans.map((plan) => (
-                  <div key={plan.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
+                dataspace.texts.map((text) => (
+                  <div key={text.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
                     <div>
-                      <p className="font-medium text-slate-900">{plan.title}</p>
-                      <p className="text-xs text-slate-500">{formatDateTime(plan.startAt)}</p>
+                      <p className="font-medium text-slate-900">
+                        {text.content.trim().split("\n")[0]?.slice(0, 80) || "Text draft"}
+                      </p>
+                      <p className="text-xs text-slate-500">{formatDateTime(text.updatedAt)}</p>
                     </div>
                     <Link
-                      href={`/plans/${plan.id}`}
+                      href={`/texts/${text.id}`}
                       className="text-xs font-semibold text-slate-700 hover:underline"
                     >
                       Open
@@ -125,8 +275,62 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               )}
             </div>
           </div>
+
+          <div className="dr-card p-6">
+            <h2 className="text-sm font-semibold uppercase text-slate-500">Plans</h2>
+            <div className="mt-3 space-y-3 text-sm text-slate-700">
+              {dataspace.plans.length === 0 ? (
+                <p className="text-slate-500">No plans yet.</p>
+              ) : (
+                dataspace.plans.map((plan) => {
+                  const joinStatus =
+                    plan.createdById === session.user.id || planPairIds.has(plan.id)
+                      ? "JOINED"
+                      : planParticipantMap.get(plan.id) === "PENDING"
+                        ? "PENDING"
+                        : planParticipantMap.get(plan.id) === "APPROVED"
+                          ? "JOINED"
+                          : "NONE";
+                  return (
+                    <div key={plan.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
+                      <div>
+                        <p className="font-medium text-slate-900">{plan.title}</p>
+                        <p className="text-xs text-slate-500">{formatDateTime(plan.startAt)}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {plan.isPublic ? (
+                          <JoinButton
+                            resourceType="plan"
+                            resourceId={plan.id}
+                            initialStatus={joinStatus}
+                            canJoin={true}
+                          />
+                        ) : null}
+                        <Link
+                          href={`/plans/${plan.id}`}
+                          className="text-xs font-semibold text-slate-700 hover:underline"
+                        >
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+  const meetingMemberIds = new Set(meetingMembers.map((member) => member.meetingId));
+  const meetingInviteIds = new Set(meetingInvites.map((invite) => invite.meetingId));
+  const planParticipantMap = new Map(
+    planParticipants.map((participant) => [participant.planId, participant.status])
+  );
+  const planPairIds = new Set(
+    planPairs
+      .map((pair) => pair.planRound.planId)
+      .filter((planId): planId is string => Boolean(planId))
+  );

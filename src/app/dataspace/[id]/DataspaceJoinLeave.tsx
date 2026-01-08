@@ -9,6 +9,8 @@ type Props = {
   isAdmin: boolean;
   isPrivate: boolean;
   isOwner: boolean;
+  isSubscribed: boolean;
+  hasTelegramHandle: boolean;
 };
 
 export function DataspaceJoinLeave({
@@ -16,7 +18,9 @@ export function DataspaceJoinLeave({
   isMember,
   isAdmin,
   isPrivate,
-  isOwner
+  isOwner,
+  isSubscribed,
+  hasTelegramHandle
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -67,6 +71,29 @@ export function DataspaceJoinLeave({
     }
   }
 
+  async function handleSubscription(shouldSubscribe: boolean) {
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        `/api/dataspaces/${dataspaceId}/${shouldSubscribe ? "subscribe" : "unsubscribe"}`,
+        { method: "POST" }
+      );
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setError(payload?.error ?? "Unable to update subscription");
+      } else {
+        router.refresh();
+      }
+    } catch (error) {
+      setError("Unable to update subscription");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (isAdmin) {
     return (
       <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -101,6 +128,25 @@ export function DataspaceJoinLeave({
       >
         {loading ? "Updating..." : isMember ? "Leave dataspace" : "Join dataspace"}
       </button>
+      {isMember ? (
+        <button
+          type="button"
+          onClick={() => handleSubscription(!isSubscribed)}
+          className="dr-button-outline px-4 py-2 text-sm"
+          disabled={loading}
+        >
+          {loading
+            ? "Updating..."
+            : isSubscribed
+              ? "Unsubscribe notifications"
+              : "Subscribe to notifications"}
+        </button>
+      ) : null}
+      {isMember && !hasTelegramHandle ? (
+        <span className="text-xs text-slate-500">
+          Add a Telegram handle in Profile settings to receive alerts.
+        </span>
+      ) : null}
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
     </div>
   );

@@ -4,10 +4,12 @@ import { useState } from "react";
 
 type Props = {
   initialTelegramHandle: string;
+  initialCalComLink: string;
 };
 
-export function ProfileSettingsForm({ initialTelegramHandle }: Props) {
+export function ProfileSettingsForm({ initialTelegramHandle, initialCalComLink }: Props) {
   const [telegramHandle, setTelegramHandle] = useState(initialTelegramHandle);
+  const [calComLink, setCalComLink] = useState(initialCalComLink);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<"success" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export function ProfileSettingsForm({ initialTelegramHandle }: Props) {
     const response = await fetch("/api/account/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ telegramHandle })
+      body: JSON.stringify({ telegramHandle, calComLink })
     });
 
     const payload = await response.json().catch(() => null);
@@ -48,9 +50,19 @@ export function ProfileSettingsForm({ initialTelegramHandle }: Props) {
         />
         <p className="mt-1 text-xs text-slate-500">We store it without the @ symbol.</p>
       </div>
+      <div>
+        <label className="text-sm font-medium">Cal.com link</label>
+        <input
+          value={calComLink}
+          onChange={(event) => setCalComLink(event.target.value)}
+          className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          placeholder="https://cal.com/yourname"
+        />
+        <p className="mt-1 text-xs text-slate-500">Optional scheduling link.</p>
+      </div>
       {message ? (
         <p className="text-sm text-emerald-600">
-          Telegram handle updated.
+          Settings updated.
           <br />
           Please message{" "}
           <a

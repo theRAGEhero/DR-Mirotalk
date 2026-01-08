@@ -3,13 +3,20 @@
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-export function RegisterForm() {
+type Props = {
+  initialCode: string;
+  registrationOpen: boolean;
+  requireCode: boolean;
+};
+
+export function RegisterForm({ initialCode, registrationOpen, requireCode }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +28,7 @@ export function RegisterForm() {
     const response = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, confirmPassword })
+      body: JSON.stringify({ email, password, confirmPassword, code })
     });
 
     let data: any = null;
@@ -49,6 +56,11 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {!registrationOpen ? (
+        <p className="text-sm text-amber-700">
+          Registration is currently closed.
+        </p>
+      ) : null}
       <div>
         <label className="text-sm font-medium">Email</label>
         <input
@@ -80,11 +92,31 @@ export function RegisterForm() {
           required
         />
       </div>
+      {requireCode ? (
+        <div>
+          <label className="text-sm font-medium">Registration code</label>
+          <input
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+            required
+          />
+        </div>
+      ) : code ? (
+        <div>
+          <label className="text-sm font-medium">Registration code (optional)</label>
+          <input
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
+          />
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <button
         type="submit"
         className="dr-button w-full px-4 py-2 text-sm"
-        disabled={loading}
+        disabled={loading || !registrationOpen}
       >
         {loading ? "Creating..." : "Create account"}
       </button>
@@ -94,3 +126,6 @@ export function RegisterForm() {
     </form>
   );
 }
+  useEffect(() => {
+    setCode(initialCode);
+  }, [initialCode]);

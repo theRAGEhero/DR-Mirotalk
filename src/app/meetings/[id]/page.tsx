@@ -7,6 +7,7 @@ import { EmbedCall } from "@/app/meetings/[id]/EmbedCall";
 import { MeetingActions } from "@/app/meetings/[id]/MeetingActions";
 import { TranscriptionAutoLink } from "@/app/meetings/[id]/TranscriptionAutoLink";
 import { MeetingInviteActions } from "@/app/meetings/[id]/MeetingInviteActions";
+import { MeetingParticipation } from "@/app/meetings/[id]/MeetingParticipation";
 
 export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -20,6 +21,12 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
     include: {
       members: {
         include: { user: true }
+      },
+      invites: {
+        include: { user: true }
+      },
+      dataspace: {
+        include: { members: { select: { userId: true } } }
       }
     }
   });
@@ -30,6 +37,9 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
 
   const isAdmin = session.user.role === "ADMIN";
   const membership = meeting.members.find((member) => member.userId === session.user.id);
+  const isDataspaceMember = meeting.dataspace
+    ? meeting.dataspace.members.some((member) => member.userId === session.user.id)
+    : false;
   const pendingInvite = await prisma.meetingInvite.findUnique({
     where: {
       meetingId_userId: {
@@ -39,7 +49,11 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
     }
   });
 
-  const canAccess = isAdmin || Boolean(membership) || pendingInvite?.status === "ACCEPTED";
+  const canAccess =
+    isAdmin ||
+    Boolean(membership) ||
+    pendingInvite?.status === "ACCEPTED" ||
+    (meeting.isPublic && isDataspaceMember);
 
   if (!canAccess) {
     if (pendingInvite?.status === "PENDING") {
@@ -57,7 +71,10 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
   }
 
   const canManage = isAdmin || membership?.role === "HOST";
+  const canInvite = canManage || (meeting.isPublic && isDataspaceMember);
   const active = isMeetingActive(meeting);
+  const isConcluded = !meeting.isActive || (meeting.expiresAt ? meeting.expiresAt.getTime() < Date.now() : false);
+  const canEdit = (isAdmin || membership?.role === "HOST" || meeting.createdById === session.user.id) && !isConcluded;
   const baseUrl = process.env.MIROTALK_BASE_URL || "";
   const langCode = meeting.language === "IT" ? "it" : "en";
   const providerCode = meeting.transcriptionProvider === "VOSK" ? "vosk" : "deepgram";
@@ -78,13 +95,26 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           <h1 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
             {meeting.title}
           </h1>
+          {meeting.description ? (
+            <p className="mt-2 text-sm text-slate-600">{meeting.description}</p>
+          ) : null}
         </div>
-        <Link
-          href="/dashboard"
-          className="text-sm font-medium text-slate-600 hover:text-slate-900"
-        >
-          Back to dashboard
-        </Link>
+        <div className="flex items-center gap-3">
+          {canEdit ? (
+            <Link
+              href={`/meetings/${meeting.id}/edit`}
+              className="dr-button-outline px-3 py-1 text-xs"
+            >
+              Edit meeting
+            </Link>
+          ) : null}
+          <Link
+            href="/dashboard"
+            className="text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            Back to dashboard
+          </Link>
+        </div>
       </div>
 
       <EmbedCall
@@ -125,7 +155,23 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <MeetingActions meetingId={meeting.id} canManage={canManage} isActive={meeting.isActive} />
+      <MeetingParticipation
+        meetingId={meeting.id}
+        isPublic={meeting.isPublic}
+        requiresApproval={meeting.requiresApproval}
+        capacity={meeting.capacity}
+        isDataspaceMember={isDataspaceMember}
+        isMember={Boolean(membership)}
+        pendingStatus={pendingInvite?.status ?? null}
+        pendingRequests={meeting.invites
+          .filter((invite) => invite.status === "PENDING")
+          .map((invite) => ({
+            id: invite.id,
+            email: invite.user.email
+          }))}
+        canManageRequests={canManage}
+      />
+      <MeetingActions meetingId={meeting.id} canInvite={canInvite} isActive={meeting.isActive} />
       <TranscriptionAutoLink
         meetingId={meeting.id}
         canManage={canManage}
