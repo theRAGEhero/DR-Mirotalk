@@ -77,6 +77,16 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
     (meeting) => meeting.scheduledStartAt && meeting.scheduledStartAt > now
   );
   const upcomingPlans = dataspace.plans.filter((plan) => plan.startAt > now);
+  const meetingMemberIds = new Set(meetingMembers.map((member) => member.meetingId));
+  const meetingInviteIds = new Set(meetingInvites.map((invite) => invite.meetingId));
+  const planParticipantMap = new Map(
+    planParticipants.map((participant) => [participant.planId, participant.status])
+  );
+  const planPairIds = new Set(
+    planPairs
+      .map((pair) => pair.planRound.planId)
+      .filter((planId): planId is string => Boolean(planId))
+  );
 
   return (
     <div className="space-y-6">
@@ -324,13 +334,3 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
     </div>
   );
 }
-  const meetingMemberIds = new Set(meetingMembers.map((member) => member.meetingId));
-  const meetingInviteIds = new Set(meetingInvites.map((invite) => invite.meetingId));
-  const planParticipantMap = new Map(
-    planParticipants.map((participant) => [participant.planId, participant.status])
-  );
-  const planPairIds = new Set(
-    planPairs
-      .map((pair) => pair.planRound.planId)
-      .filter((planId): planId is string => Boolean(planId))
-  );

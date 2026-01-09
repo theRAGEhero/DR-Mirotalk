@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { profileSettingsSchema } from "@/lib/validators";
@@ -27,18 +28,35 @@ export async function POST(request: Request) {
 
   const existing = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { telegramHandle: true }
+    select: { telegramHandle: true, telegramChatId: true }
   });
 
-  await prisma.user.update({
+  let telegramVerificationCode: string | null = null;
+  let telegramVerificationExpiresAt: Date | null = null;
+  const needsVerification =
+    telegramHandle &&
+    (existing?.telegramHandle !== telegramHandle || !existing?.telegramChatId);
+
+  if (needsVerification) {
+    telegramVerificationCode = crypto.randomBytes(4).toString("hex").toUpperCase();
+    telegramVerificationExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+  }
+
+  const updated = await prisma.user.update({
     where: { id: session.user.id },
     data: {
       telegramHandle,
       calComLink,
       telegramChatId:
-        existing?.telegramHandle !== telegramHandle ? null : undefined
+        existing?.telegramHandle !== telegramHandle ? null : undefined,
+      telegramVerificationCode,
+      telegramVerificationExpiresAt
     }
   });
 
-  return NextResponse.json({ message: "Profile updated" });
+  return NextResponse.json({
+    message: "Profile updated",
+    telegramVerificationCode:
+      needsVerification ? updated.telegramVerificationCode : null
+  });
 }

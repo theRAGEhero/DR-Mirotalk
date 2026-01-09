@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { getBaseUrlCandidates } from "@/lib/transcription";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 function normalizeLanguage(code: string) {
   return code === "IT" ? "it" : "en";
@@ -89,17 +91,46 @@ export async function POST(
     return NextResponse.json({ error: "Meditation index is required" }, { status: 400 });
   }
 
+  const audioBuffer = Buffer.from(await audio.arrayBuffer());
+  const uploadsDir = path.join(process.cwd(), "data", "meditation-audio", "uploads");
+  await fs.mkdir(uploadsDir, { recursive: true });
+  const safeName = `${plan.id}-${session.user.id}-${Date.now()}-${audio.name || `meditation-${meditationIndex}.webm`}`;
+  const audioPath = path.join(uploadsDir, safeName);
+  await fs.writeFile(audioPath, audioBuffer);
+
+  const job = await prisma.transcriptionJob.create({
+    data: {
+      kind: "MEDITATION",
+      status: "RUNNING",
+      provider: plan.transcriptionProvider,
+      planId: plan.id,
+      userId: session.user.id,
+      meditationIndex,
+      attempts: 1,
+      lastAttemptAt: new Date(),
+      audioPath
+    }
+  });
+
   const baseUrl =
     plan.transcriptionProvider === "VOSK"
       ? process.env.VOSK_BASE_URL
       : process.env.DEEPGRAM_BASE_URL;
 
   if (!baseUrl) {
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: "Transcription service is not configured" }
+    });
     return NextResponse.json({ error: "Transcription service is not configured" }, { status: 500 });
   }
 
   const candidates = getBaseUrlCandidates(baseUrl);
   if (candidates.length === 0) {
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: "Transcription service is not configured" }
+    });
     return NextResponse.json({ error: "Transcription service is not configured" }, { status: 500 });
   }
 
@@ -124,11 +155,19 @@ export async function POST(
 
   if (!createRoundResponse) {
     const message = createRoundError instanceof Error ? createRoundError.message : "Unable to reach transcription service";
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: message }
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const roundPayload = await createRoundResponse.json().catch(() => null);
   if (!createRoundResponse.ok) {
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: roundPayload?.error ?? "Unable to create transcription round" }
+    });
     return NextResponse.json(
       { error: roundPayload?.error ?? "Unable to create transcription round" },
       { status: 502 }
@@ -137,6 +176,10 @@ export async function POST(
 
   const roundId = roundPayload?.round?.id;
   if (!roundId) {
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: "Invalid transcription round" }
+    });
     return NextResponse.json({ error: "Invalid transcription round" }, { status: 502 });
   }
 
@@ -162,11 +205,19 @@ export async function POST(
   if (!transcriptionResponse) {
     const message =
       transcriptionError instanceof Error ? transcriptionError.message : "Unable to reach transcription service";
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: message, roundId }
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const transcriptionPayload = await transcriptionResponse.json().catch(() => null);
   if (!transcriptionResponse.ok) {
+    await prisma.transcriptionJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", lastError: transcriptionPayload?.error ?? "Transcription failed", roundId }
+    });
     return NextResponse.json(
       { error: transcriptionPayload?.error ?? "Transcription failed" },
       { status: 502 }
@@ -189,6 +240,11 @@ export async function POST(
         ? JSON.stringify(transcriptionPayload.deliberation)
         : null
     }
+  });
+
+  await prisma.transcriptionJob.update({
+    where: { id: job.id },
+    data: { status: "DONE", roundId, lastError: null }
   });
 
   return NextResponse.json({

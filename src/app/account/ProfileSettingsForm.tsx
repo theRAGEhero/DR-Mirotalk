@@ -13,6 +13,7 @@ export function ProfileSettingsForm({ initialTelegramHandle, initialCalComLink }
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<"success" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [telegramCode, setTelegramCode] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -35,6 +36,7 @@ export function ProfileSettingsForm({ initialTelegramHandle, initialCalComLink }
       return;
     }
 
+    setTelegramCode(payload?.telegramVerificationCode ?? null);
     setMessage("success");
   }
 
@@ -63,17 +65,38 @@ export function ProfileSettingsForm({ initialTelegramHandle, initialCalComLink }
       {message ? (
         <p className="text-sm text-emerald-600">
           Settings updated.
-          <br />
-          Please message{" "}
-          <a
-            href="https://t.me/democracyRoutes_bot"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-emerald-700 underline"
-          >
-            @democracyRoutes_bot
-          </a>{" "}
-          to connect notifications.
+          {telegramCode ? (
+            <>
+              <br />
+              Send this code to{" "}
+              <a
+                href="https://t.me/democracyRoutes_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-emerald-700 underline"
+              >
+                @democracyRoutes_bot
+              </a>{" "}
+              to verify your Telegram account:
+              <span className="mt-2 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                {telegramCode}
+              </span>
+            </>
+          ) : (
+            <>
+              <br />
+              Please message{" "}
+              <a
+                href="https://t.me/democracyRoutes_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-emerald-700 underline"
+              >
+                @democracyRoutes_bot
+              </a>{" "}
+              to connect notifications.
+            </>
+          )}
         </p>
       ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

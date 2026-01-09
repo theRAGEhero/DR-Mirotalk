@@ -132,6 +132,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
 
   const roundGroups = plan.rounds.map((round) => {
     const rooms = new Map<string, string[]>();
+    const meetingByRoom = new Map<string, string>();
     round.pairs.forEach((pair) => {
       if (!rooms.has(pair.roomId)) {
         rooms.set(pair.roomId, []);
@@ -140,12 +141,16 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
       if (pair.userA?.email) list.push(pair.userA.email);
       if (pair.userB?.email) list.push(pair.userB.email);
       rooms.set(pair.roomId, list);
+      if (pair.meetingId) {
+        meetingByRoom.set(pair.roomId, pair.meetingId);
+      }
     });
     return {
       roundNumber: round.roundNumber,
       rooms: Array.from(rooms.entries()).map(([roomId, participants]) => ({
         roomId,
-        participants
+        participants,
+        meetingId: meetingByRoom.get(roomId) ?? null
       }))
     };
   });
@@ -173,6 +178,8 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
       <ParticipantViewClient
         planId={plan.id}
         planTitle={plan.title}
+        language={plan.language}
+        transcriptionProvider={plan.transcriptionProvider}
         startAt={plan.startAt.toISOString()}
         roundDurationMinutes={plan.roundDurationMinutes}
         roundsCount={plan.roundsCount}

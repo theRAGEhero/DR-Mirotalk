@@ -17,7 +17,8 @@ export async function GET() {
 
   return NextResponse.json({
     registrationOpen: settings.registrationOpen,
-    requireCode: settings.requireCode
+    requireCode: settings.requireCode,
+    requireEmailConfirmation: settings.requireEmailConfirmation
   });
 }
 
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const registrationOpen = Boolean(body?.registrationOpen);
   const requireCode = Boolean(body?.requireCode);
+  const requireEmailConfirmation = Boolean(body?.requireEmailConfirmation);
 
   const existing =
     (await prisma.registrationSettings.findFirst()) ??
@@ -40,11 +42,12 @@ export async function POST(request: Request) {
 
   const settings = await prisma.registrationSettings.update({
     where: { id: existing.id },
-    data: { registrationOpen, requireCode }
+    data: { registrationOpen, requireCode, requireEmailConfirmation }
   });
 
   return NextResponse.json({
     registrationOpen: settings.registrationOpen,
-    requireCode: settings.requireCode
+    requireCode: settings.requireCode,
+    requireEmailConfirmation: settings.requireEmailConfirmation
   });
 }

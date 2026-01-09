@@ -10,10 +10,6 @@ export default async function PlanBuilderPage() {
     return null;
   }
 
-  if (session.user.role !== "ADMIN") {
-    return <p className="text-sm text-slate-500">Access denied.</p>;
-  }
-
   const [users, dataspaces] = await Promise.all([
     prisma.user.findMany({
       orderBy: { createdAt: "asc" },

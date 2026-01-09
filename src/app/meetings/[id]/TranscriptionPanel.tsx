@@ -14,6 +14,8 @@ export function TranscriptionPanel({ meetingId, canManage, initialRoundId }: Pro
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   const [autoAttempted, setAutoAttempted] = useState(false);
 
   const handleFetch = useCallback(async () => {
@@ -44,6 +46,8 @@ export function TranscriptionPanel({ meetingId, canManage, initialRoundId }: Pro
       setRoundId(payload.roundId);
       setMessage("Transcription linked automatically.");
     }
+    setSource(payload?.source ?? null);
+    setProvider(payload?.provider ?? null);
     setData(payload.transcription ?? payload);
   }, [meetingId, roundId]);
 
@@ -58,7 +62,13 @@ export function TranscriptionPanel({ meetingId, canManage, initialRoundId }: Pro
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">Transcription</h3>
-          <p className="text-sm text-slate-500">Loaded from the selected transcription service.</p>
+          <p className="text-sm text-slate-500">
+            {source === "db"
+              ? "Source: Database cache."
+              : source === "remote"
+                ? `Source: ${provider ?? "Transcription service"}.`
+                : "Loaded from the selected transcription service."}
+          </p>
         </div>
         <button
           type="button"
@@ -66,7 +76,7 @@ export function TranscriptionPanel({ meetingId, canManage, initialRoundId }: Pro
           className="dr-button-outline px-4 py-2 text-sm"
           disabled={loading}
         >
-          {loading ? "Loading..." : "Load transcription"}
+          {loading ? "Loading..." : data ? "Refresh transcription" : "Load transcription"}
         </button>
       </div>
 
@@ -97,9 +107,9 @@ function TranscriptionView({ data }: { data: any }) {
 
   if (contributions.length === 0) {
     return (
-      <pre className="mt-4 max-h-96 overflow-auto rounded bg-slate-900 p-4 text-xs text-slate-100">
-        {JSON.stringify(data, null, 2)}
-      </pre>
+      <p className="mt-4 text-sm text-slate-500">
+        No transcript content available yet.
+      </p>
     );
   }
 
