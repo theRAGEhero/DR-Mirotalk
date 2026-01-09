@@ -64,7 +64,9 @@ export default async function DataspacePage() {
         members: {
           include: { user: { select: { email: true } } }
         },
-        meetings: { where: { isHidden: false }, select: { id: true } }
+        meetings: { where: { isHidden: false }, select: { id: true } },
+        plans: { select: { id: true } },
+        texts: { select: { id: true } }
       }
     }));
 

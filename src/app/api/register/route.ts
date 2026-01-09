@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { registerSchema } from "@/lib/validators";
+import { sendMail } from "@/lib/mailer";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -40,15 +42,46 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  const requireEmailConfirmation = settings.requireEmailConfirmation;
+  const verificationToken = requireEmailConfirmation
+    ? crypto.randomBytes(32).toString("base64url")
+    : null;
+  const verificationExpiresAt = requireEmailConfirmation
+    ? new Date(Date.now() + 1000 * 60 * 60 * 24)
+    : null;
 
   const user = await prisma.user.create({
     data: {
       email: parsed.data.email,
       passwordHash,
       role: "USER",
-      mustChangePassword: false
+      mustChangePassword: false,
+      emailVerifiedAt: requireEmailConfirmation ? null : new Date(),
+      emailVerificationToken: verificationToken,
+      emailVerificationExpiresAt: verificationExpiresAt
     }
   });
 
-  return NextResponse.json({ id: user.id });
+  if (requireEmailConfirmation && verificationToken) {
+    const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3015";
+    const activationLink = `${appBaseUrl}/activate?token=${verificationToken}`;
+    const emailResult = await sendMail({
+      to: user.email,
+      subject: "Confirm your account",
+      html: `
+        <p>Your Democracy Routes account is almost ready.</p>
+        <p>Click to activate: <a href="${activationLink}">${activationLink}</a></p>
+        <p>If you did not request this, you can ignore this email.</p>
+      `,
+      text: `Confirm your account: ${activationLink}`
+    });
+
+    return NextResponse.json({
+      id: user.id,
+      verificationRequired: true,
+      emailSent: emailResult.ok
+    });
+  }
+
+  return NextResponse.json({ id: user.id, verificationRequired: false });
 }

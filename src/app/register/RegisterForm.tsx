@@ -18,11 +18,17 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
   const [confirmPassword, setConfirmPassword] = useState("");
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setCode(initialCode);
+  }, [initialCode]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    setSuccess(null);
     setLoading(true);
 
     const response = await fetch("/api/register", {
@@ -40,6 +46,16 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
     if (!response.ok) {
       const message = data?.error?.formErrors?.[0] ?? data?.error ?? "Unable to register";
       setError(message);
+      setLoading(false);
+      return;
+    }
+
+    if (data?.verificationRequired) {
+      setSuccess(
+        data?.emailSent
+          ? "Account created. Check your email to activate your account."
+          : "Account created, but confirmation email was not sent. Contact support."
+      );
       setLoading(false);
       return;
     }
@@ -113,6 +129,7 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
         </div>
       ) : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
       <button
         type="submit"
         className="dr-button w-full px-4 py-2 text-sm"
@@ -126,6 +143,3 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
     </form>
   );
 }
-  useEffect(() => {
-    setCode(initialCode);
-  }, [initialCode]);

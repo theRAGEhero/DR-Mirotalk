@@ -3,6 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { fetchRounds, fetchTranscription } from "@/lib/deepgram";
 
+function extractTranscriptText(transcription: any) {
+  const fromTopLevel = transcription?.contributions;
+  const fromDeliberation = transcription?.deliberation?.contributions;
+  const contributions = Array.isArray(fromTopLevel)
+    ? fromTopLevel
+    : Array.isArray(fromDeliberation)
+      ? fromDeliberation
+      : [];
+  return contributions
+    .map((entry: any) => entry?.text)
+    .filter((text: any) => typeof text === "string")
+    .join(" ");
+}
+
 async function pushTranscriptionPayload(options: {
   groupId: string | null;
   externalId: string;
@@ -46,6 +60,7 @@ export async function GET(
   const meeting = await prisma.meeting.findUnique({
     where: { id: params.id },
     include: {
+      transcript: true,
       members: {
         where: { userId: session.user.id }
       }
@@ -71,6 +86,24 @@ export async function GET(
     provider === "VOSK"
       ? process.env.VOSK_BASE_URL || ""
       : process.env.DEEPGRAM_BASE_URL || "";
+  const now = new Date();
+  const existingJob = await prisma.transcriptionJob.findFirst({
+    where: { meetingId: meeting.id, kind: "MEETING" }
+  });
+
+  if (meeting.transcript?.transcriptJson) {
+    try {
+      const cached = JSON.parse(meeting.transcript.transcriptJson);
+      return NextResponse.json({
+        transcription: cached,
+        roundId: meeting.transcript.roundId ?? roundId,
+        provider: meeting.transcript.provider,
+        source: "db"
+      });
+    } catch {
+      // fall back to refetch
+    }
+  }
 
   if (!roundId && auto) {
     const roundsResponse = await fetchRounds(baseUrl);
@@ -98,18 +131,106 @@ export async function GET(
   }
 
   if (!roundId) {
+    if (existingJob) {
+      await prisma.transcriptionJob.update({
+        where: { id: existingJob.id },
+        data: {
+          status: "FAILED",
+          provider,
+          roundId: null,
+          attempts: { increment: 1 },
+          lastAttemptAt: now,
+          lastError: "Transcription not linked"
+        }
+      });
+    } else {
+      await prisma.transcriptionJob.create({
+        data: {
+          kind: "MEETING",
+          status: "FAILED",
+          provider,
+          meetingId: meeting.id,
+          userId: session.user.id,
+          roundId: null,
+          attempts: 1,
+          lastAttemptAt: now,
+          lastError: "Transcription not linked"
+        }
+      });
+    }
     return NextResponse.json({ error: "Transcription not linked" }, { status: 404 });
   }
 
   try {
+    if (existingJob) {
+      await prisma.transcriptionJob.update({
+        where: { id: existingJob.id },
+        data: {
+          status: "RUNNING",
+          provider,
+          roundId,
+          attempts: { increment: 1 },
+          lastAttemptAt: now,
+          lastError: null
+        }
+      });
+    } else {
+      await prisma.transcriptionJob.create({
+        data: {
+          kind: "MEETING",
+          status: "RUNNING",
+          provider,
+          meetingId: meeting.id,
+          userId: session.user.id,
+          roundId,
+          attempts: 1,
+          lastAttemptAt: now
+        }
+      });
+    }
     const transcription = await fetchTranscription(baseUrl, roundId);
+    const transcriptText = extractTranscriptText(transcription);
+    await prisma.meetingTranscript.upsert({
+      where: { meetingId: meeting.id },
+      update: {
+        provider,
+        roundId,
+        transcriptText,
+        transcriptJson: JSON.stringify(transcription)
+      },
+      create: {
+        meetingId: meeting.id,
+        provider,
+        roundId,
+        transcriptText,
+        transcriptJson: JSON.stringify(transcription)
+      }
+    });
     void pushTranscriptionPayload({
       groupId: meeting.dataspaceId ?? null,
       externalId: roundId,
       transcription
     });
-    return NextResponse.json({ transcription, roundId, provider });
+    await prisma.transcriptionJob.updateMany({
+      where: { meetingId: meeting.id, kind: "MEETING" },
+      data: {
+        status: "DONE",
+        lastError: null,
+        provider,
+        roundId
+      }
+    });
+    return NextResponse.json({ transcription, roundId, provider, source: "remote" });
   } catch (error) {
+    await prisma.transcriptionJob.updateMany({
+      where: { meetingId: meeting.id, kind: "MEETING" },
+      data: {
+        status: "FAILED",
+        lastError: error instanceof Error ? error.message : "Unable to fetch transcription",
+        provider,
+        roundId
+      }
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to fetch transcription" },
       { status: 502 }

@@ -17,6 +17,8 @@ type RoundAssignment = {
 type Props = {
   planId: string;
   planTitle?: string | null;
+  language: string;
+  transcriptionProvider: string;
   startAt: string;
   roundDurationMinutes: number;
   roundsCount: number;
@@ -39,7 +41,7 @@ type Props = {
   }>;
   roundGroups: Array<{
     roundNumber: number;
-    rooms: Array<{ roomId: string; participants: string[] }>;
+    rooms: Array<{ roomId: string; participants: string[]; meetingId?: string | null }>;
   }>;
   assignments: RoundAssignment[];
   baseUrl: string;
@@ -69,6 +71,8 @@ function formatCountdownHuman(totalSeconds: number) {
 export function ParticipantViewClient({
   planId,
   planTitle,
+  language,
+  transcriptionProvider,
   startAt,
   roundDurationMinutes,
   roundsCount,
@@ -109,10 +113,14 @@ export function ParticipantViewClient({
     Array<{ meditationIndex: number; roundAfter: number | null; transcriptText: string; userEmail: string }>
   >([]);
   const [planRecapParticipants, setPlanRecapParticipants] = useState<string[]>([]);
+  const [planRecapMeetingTranscripts, setPlanRecapMeetingTranscripts] = useState<
+    Array<{ meetingId: string; roundNumber: number; participants: string[]; transcriptText: string }>
+  >([]);
   const [recapLoading, setRecapLoading] = useState(false);
   const [recapError, setRecapError] = useState<string | null>(null);
   const lastSavedTextRef = useRef<string>("");
-  const [showModal, setShowModal] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [autoOpenedModal, setAutoOpenedModal] = useState(false);
   const [meditationMuted, setMeditationMuted] = useState(false);
 
   const blockById = useMemo(
@@ -122,6 +130,10 @@ export function ParticipantViewClient({
   const roundGroupsByNumber = useMemo(
     () => new Map(roundGroups.map((round) => [round.roundNumber, round.rooms])),
     [roundGroups]
+  );
+  const meetingTranscriptById = useMemo(
+    () => new Map(planRecapMeetingTranscripts.map((item) => [item.meetingId, item.transcriptText])),
+    [planRecapMeetingTranscripts]
   );
 
   useEffect(() => {
@@ -137,7 +149,6 @@ export function ParticipantViewClient({
       document.body.style.overflow = "";
     }
   }, [showModal]);
-
 
   useEffect(() => {
     if (!showModal) return;
@@ -254,6 +265,19 @@ export function ParticipantViewClient({
   } else if (effectiveNow >= schedule.totalEndMs) {
     status = "done";
   }
+
+  useEffect(() => {
+    if (status === "active") {
+      if (!autoOpenedModal) {
+        setShowModal(true);
+        setAutoOpenedModal(true);
+      }
+      return;
+    }
+    if (showModal) {
+      setShowModal(false);
+    }
+  }, [status, autoOpenedModal, showModal]);
 
   const currentRound = Math.min(Math.max(currentRoundIndex, 1), roundsCount);
   const segmentStart = currentSegment?.startAtMs ?? startTime;
@@ -499,35 +523,40 @@ export function ParticipantViewClient({
     };
   }, [status, schedule.segments, planId]);
 
-  useEffect(() => {
-    if (status !== "done") return;
-    if (recapView !== "plan") return;
-    if (planRecapTextEntries.length > 0 || planRecapMeditations.length > 0) return;
-
-    let active = true;
+  async function refreshPlanRecap() {
     setRecapLoading(true);
     setRecapError(null);
-
-    async function loadPlanRecap() {
-      const response = await fetch(`/api/plans/${planId}/recap`);
-      const payload = await response.json().catch(() => null);
-      if (!active) return;
-      if (!response.ok) {
-        setRecapError("Unable to load plan recap.");
-        setRecapLoading(false);
-        return;
-      }
-      setPlanRecapTextEntries(payload?.textEntries ?? []);
-      setPlanRecapMeditations(payload?.meditationSessions ?? []);
-      setPlanRecapParticipants(payload?.participants ?? []);
+    const response = await fetch(`/api/plans/${planId}/recap`);
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      setRecapError("Unable to load plan recap.");
       setRecapLoading(false);
+      return;
     }
+    setPlanRecapTextEntries(payload?.textEntries ?? []);
+    setPlanRecapMeditations(payload?.meditationSessions ?? []);
+    setPlanRecapMeetingTranscripts(payload?.meetingTranscripts ?? []);
+    setPlanRecapParticipants(payload?.participants ?? []);
+    setRecapLoading(false);
+  }
 
-    loadPlanRecap();
-    return () => {
-      active = false;
-    };
-  }, [planId, recapView, status, planRecapTextEntries.length, planRecapMeditations.length]);
+  useEffect(() => {
+    if (status !== "done") return;
+    if (
+      planRecapTextEntries.length > 0 ||
+      planRecapMeditations.length > 0 ||
+      planRecapMeetingTranscripts.length > 0
+    ) {
+      return;
+    }
+    refreshPlanRecap();
+  }, [
+    planId,
+    status,
+    planRecapTextEntries.length,
+    planRecapMeditations.length,
+    planRecapMeetingTranscripts.length
+  ]);
 
   async function handleMeditationComplete(
     audio: Blob,
@@ -571,6 +600,12 @@ export function ParticipantViewClient({
             {planTitle ? planTitle : "Plan"}
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+            <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase text-slate-600">
+              {language}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase text-slate-600">
+              {transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram"}
+            </span>
             <span className="uppercase tracking-[0.18em]">Phase</span>
             <span className="font-semibold text-slate-900">
               {status === "pending" && "Not started"}
@@ -743,24 +778,34 @@ export function ParticipantViewClient({
                 Notes, posters, and round highlights from this plan.
               </p>
             </div>
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold text-slate-600">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold text-slate-600">
+                <button
+                  type="button"
+                  onClick={() => setRecapView("personal")}
+                  className={`rounded-full px-3 py-1 ${
+                    recapView === "personal" ? "bg-slate-900 text-white" : "hover:text-slate-900"
+                  }`}
+                >
+                  Personal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecapView("plan")}
+                  className={`rounded-full px-3 py-1 ${
+                    recapView === "plan" ? "bg-slate-900 text-white" : "hover:text-slate-900"
+                  }`}
+                >
+                  Plan view
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => setRecapView("personal")}
-                className={`rounded-full px-3 py-1 ${
-                  recapView === "personal" ? "bg-slate-900 text-white" : "hover:text-slate-900"
-                }`}
+                onClick={refreshPlanRecap}
+                className="dr-button-outline px-3 py-1 text-xs"
+                disabled={recapLoading}
               >
-                Personal
-              </button>
-              <button
-                type="button"
-                onClick={() => setRecapView("plan")}
-                className={`rounded-full px-3 py-1 ${
-                  recapView === "plan" ? "bg-slate-900 text-white" : "hover:text-slate-900"
-                }`}
-              >
-                Plan view
+                {recapLoading ? "Refreshing..." : "Refresh recap"}
               </button>
             </div>
           </div>
@@ -806,6 +851,14 @@ export function ParticipantViewClient({
                         </a>
                       </div>
                     ) : null}
+                    {recapView === "personal" && meetingId ? (
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-700">
+                        <p className="text-xs font-semibold uppercase text-slate-500">Transcript</p>
+                        <p className="mt-1 text-sm text-slate-700">
+                          {meetingTranscriptById.get(meetingId) || "No transcript available yet."}
+                        </p>
+                      </div>
+                    ) : null}
                     {recapView === "plan" ? (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {roundRooms.length === 0 ? (
@@ -817,6 +870,11 @@ export function ParticipantViewClient({
                               <p className="mt-1 text-sm font-semibold text-slate-900">
                                 {room.participants.join(" & ")}
                               </p>
+                              <div className="mt-2 text-xs text-slate-600">
+                                {room.meetingId
+                                  ? meetingTranscriptById.get(room.meetingId) || "No transcript yet."
+                                  : "No transcript yet."}
+                              </div>
                             </div>
                           ))
                         )}

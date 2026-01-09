@@ -31,6 +31,17 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const registrationSettings =
+          (await prisma.registrationSettings.findFirst()) ??
+          (await prisma.registrationSettings.create({ data: {} }));
+        if (
+          registrationSettings.requireEmailConfirmation &&
+          !user.emailVerifiedAt &&
+          user.emailVerificationToken
+        ) {
+          return null;
+        }
+
         const passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!passwordOk) {
           return null;

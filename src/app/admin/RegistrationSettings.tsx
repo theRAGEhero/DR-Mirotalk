@@ -12,6 +12,7 @@ type CodeRow = {
 export function RegistrationSettings() {
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [requireCode, setRequireCode] = useState(false);
+  const [requireEmailConfirmation, setRequireEmailConfirmation] = useState(false);
   const [codes, setCodes] = useState<CodeRow[]>([]);
   const [newCode, setNewCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,7 @@ export function RegistrationSettings() {
       if (settingsRes.ok) {
         setRegistrationOpen(Boolean(settings?.registrationOpen));
         setRequireCode(Boolean(settings?.requireCode));
+        setRequireEmailConfirmation(Boolean(settings?.requireEmailConfirmation));
       }
       if (codesRes.ok) {
         setCodes(codesPayload?.codes ?? []);
@@ -56,7 +58,7 @@ export function RegistrationSettings() {
     const response = await fetch("/api/admin/registration/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ registrationOpen, requireCode })
+      body: JSON.stringify({ registrationOpen, requireCode, requireEmailConfirmation })
     });
     const payload = await response.json().catch(() => null);
     setSaving(false);
@@ -164,6 +166,19 @@ export function RegistrationSettings() {
           />
           Registration requires code
         </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={requireEmailConfirmation}
+            onChange={(event) => setRequireEmailConfirmation(event.target.checked)}
+            className="h-4 w-4"
+            disabled={loading}
+          />
+          Require email confirmation
+        </label>
+        <p className="text-xs text-slate-500">
+          When enabled, new users must activate their account via email before signing in.
+        </p>
         <button
           type="button"
           onClick={handleSaveSettings}

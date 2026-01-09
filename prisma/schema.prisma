@@ -11,8 +11,13 @@ model User {
   id                 String           @id @default(cuid())
   email              String           @unique
   passwordHash       String
+  emailVerifiedAt    DateTime?
+  emailVerificationToken String?
+  emailVerificationExpiresAt DateTime?
   telegramHandle     String?
   telegramChatId     String?
+  telegramVerificationCode String?
+  telegramVerificationExpiresAt DateTime?
   calComLink         String?
   role               String           @default("USER")
   mustChangePassword Boolean          @default(false)
@@ -36,8 +41,11 @@ model User {
   planTextEntries    PlanTextEntry[]
   appLogs            AppLog[]
   planTemplates      PlanTemplate[]   @relation("PlanTemplateCreator")
+  transcriptionJobs  TranscriptionJob[]
+  feedbacks          Feedback[]
 
   @@index([role])
+  @@index([emailVerificationToken])
 }
 
 model Text {
@@ -72,8 +80,22 @@ model RegistrationSettings {
   id               String   @id @default(cuid())
   registrationOpen Boolean  @default(true)
   requireCode      Boolean  @default(false)
+  requireEmailConfirmation Boolean @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userEmail String
+  pagePath  String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model RegistrationCode {
@@ -109,11 +131,29 @@ model Meeting {
   invites     MeetingInvite[]
   guestInvites MeetingGuestInvite[]
   planPairs   PlanPair[]
+  transcript  MeetingTranscript?
+  transcriptionJobs TranscriptionJob[]
 
   @@index([createdById])
   @@index([isActive])
   @@index([isHidden])
   @@index([expiresAt])
+}
+
+model MeetingTranscript {
+  id            String   @id @default(cuid())
+  meetingId     String   @unique
+  provider      String
+  roundId       String?
+  transcriptText String?
+  transcriptJson String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  meeting       Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@index([provider])
+  @@index([updatedAt])
 }
 
 model MeetingGuestInvite {
@@ -193,10 +233,39 @@ model Plan {
   meditationSessions   PlanMeditationSession[]
   blocks               PlanBlock[]
   textEntries          PlanTextEntry[]
+  transcriptionJobs    TranscriptionJob[]
 
   @@index([createdById])
   @@index([startAt])
   @@index([dataspaceId])
+}
+
+model TranscriptionJob {
+  id            String   @id @default(cuid())
+  kind          String
+  status        String
+  provider      String
+  meetingId     String?
+  planId        String?
+  userId        String?
+  roundId       String?
+  meditationIndex Int?
+  audioPath     String?
+  attempts      Int      @default(0)
+  lastError     String?
+  lastAttemptAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  meeting       Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  plan          Plan?    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([kind])
+  @@index([status])
+  @@index([provider])
+  @@index([meetingId])
+  @@index([planId])
+  @@index([updatedAt])
 }
 
 model PlanBlock {

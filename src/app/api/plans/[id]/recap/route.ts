@@ -2,6 +2,26 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
+function extractTranscriptText(raw: string | null) {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    const fromTopLevel = parsed?.contributions;
+    const fromDeliberation = parsed?.deliberation?.contributions;
+    const contributions = Array.isArray(fromTopLevel)
+      ? fromTopLevel
+      : Array.isArray(fromDeliberation)
+        ? fromDeliberation
+        : [];
+    return contributions
+      .map((entry: any) => entry?.text)
+      .filter((text: any) => typeof text === "string")
+      .join(" ");
+  } catch {
+    return "";
+  }
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
@@ -18,7 +38,17 @@ export async function GET(
         include: { members: { select: { userId: true } } }
       },
       rounds: {
-        include: { pairs: { select: { userAId: true, userBId: true } } }
+        include: {
+          pairs: {
+            select: {
+              userAId: true,
+              userBId: true,
+              meetingId: true,
+              userA: { select: { email: true } },
+              userB: { select: { email: true } }
+            }
+          }
+        }
       }
     }
   });
@@ -63,6 +93,35 @@ export async function GET(
     })
   ]);
 
+  const meetingPairs = plan.rounds.flatMap((round) =>
+    round.pairs
+      .filter((pair) => pair.meetingId)
+      .map((pair) => ({
+        roundNumber: round.roundNumber,
+        meetingId: pair.meetingId as string,
+        participants: [pair.userA?.email, pair.userB?.email].filter(Boolean) as string[]
+      }))
+  );
+  const uniqueMeetingIds = Array.from(new Set(meetingPairs.map((pair) => pair.meetingId)));
+  const meetingTranscripts = uniqueMeetingIds.length
+    ? await prisma.meetingTranscript.findMany({
+        where: { meetingId: { in: uniqueMeetingIds } },
+        select: {
+          meetingId: true,
+          transcriptText: true,
+          transcriptJson: true
+        }
+      })
+    : [];
+  const transcriptByMeeting = new Map(
+    meetingTranscripts.map((item) => {
+      const text = item.transcriptText && item.transcriptText.trim().length > 0
+        ? item.transcriptText
+        : extractTranscriptText(item.transcriptJson);
+      return [item.meetingId, text ?? ""];
+    })
+  );
+
   const participantIds = Array.from(
     new Set(
       plan.rounds.flatMap((round) =>
@@ -89,6 +148,12 @@ export async function GET(
       transcriptText: session.transcriptText ?? "",
       userEmail: session.user.email,
       createdAt: session.createdAt.toISOString()
+    })),
+    meetingTranscripts: meetingPairs.map((pair) => ({
+      meetingId: pair.meetingId,
+      roundNumber: pair.roundNumber,
+      participants: pair.participants,
+      transcriptText: transcriptByMeeting.get(pair.meetingId) ?? ""
     })),
     participants: participants.map((participant) => participant.email)
   });
