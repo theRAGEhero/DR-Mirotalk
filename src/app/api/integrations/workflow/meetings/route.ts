@@ -5,6 +5,8 @@ import { requireWorkflowKey } from "@/app/api/integrations/workflow/utils";
 import { generateRoomId } from "@/lib/utils";
 import { sendMail } from "@/lib/mailer";
 
+export const dynamic = "force-dynamic";
+
 const createWorkflowMeetingSchema = z.object({
   title: z.string().min(1),
   date: z.string().optional(),

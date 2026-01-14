@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireWorkflowKey } from "@/app/api/integrations/workflow/utils";
 import { extractMeta, parseTranscriptJson } from "@/app/api/integrations/workflow/transcription";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }

@@ -4,6 +4,8 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireWorkflowKey } from "@/app/api/integrations/workflow/utils";
 
+export const dynamic = "force-dynamic";
+
 const participantSchema = z.object({
   type: z.enum(["email", "id"]),
   value: z.string().min(1)
