@@ -21,6 +21,13 @@ const createWorkflowPlanSchema = z.object({
   created_by_email: z.string().email().optional()
 });
 
+const listQuerySchema = z.object({
+  dataspace_id: z.string().optional(),
+  updated_since: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+
 function generateRoomId() {
   return crypto.randomBytes(16).toString("base64url");
 }
@@ -44,6 +51,66 @@ function rotate(userIds: string[]) {
   const last = rest.pop();
   if (!last) return userIds;
   return [first, last, ...rest];
+}
+
+export async function GET(request: Request) {
+  const authError = requireWorkflowKey(request);
+  if (authError) return authError;
+
+  const { searchParams } = new URL(request.url);
+  const parsed = listQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const updatedSince = parsed.data.updated_since
+    ? new Date(parsed.data.updated_since)
+    : null;
+  if (parsed.data.updated_since && (!updatedSince || Number.isNaN(updatedSince.getTime()))) {
+    return NextResponse.json({ error: "Invalid updated_since" }, { status: 400 });
+  }
+
+  const where: Record<string, unknown> = {};
+  if (parsed.data.dataspace_id) {
+    where.dataspaceId = parsed.data.dataspace_id;
+  }
+  if (updatedSince) {
+    where.updatedAt = { gte: updatedSince };
+  }
+
+  const plans = await prisma.plan.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    take: parsed.data.limit,
+    skip: parsed.data.offset,
+    select: {
+      id: true,
+      title: true,
+      dataspaceId: true,
+      startAt: true,
+      roundsCount: true,
+      roundDurationMinutes: true,
+      language: true,
+      transcriptionProvider: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  return NextResponse.json({
+    plans: plans.map((plan) => ({
+      id: plan.id,
+      title: plan.title,
+      dataspaceId: plan.dataspaceId,
+      startAt: plan.startAt.toISOString(),
+      roundsCount: plan.roundsCount,
+      roundDurationMinutes: plan.roundDurationMinutes,
+      language: plan.language,
+      transcriptionProvider: plan.transcriptionProvider,
+      createdAt: plan.createdAt.toISOString(),
+      updatedAt: plan.updatedAt.toISOString()
+    }))
+  });
 }
 
 export async function POST(request: Request) {

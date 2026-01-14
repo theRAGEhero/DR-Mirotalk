@@ -32,7 +32,12 @@ export async function POST(request: Request) {
     requiresApproval,
     capacity
   } = parsed.data;
-  const providerLabel = transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram";
+  const providerLabel =
+    transcriptionProvider === "VOSK"
+      ? "Vosk"
+      : transcriptionProvider === "DEEPGRAMLIVE"
+        ? "DEEPGRAMLIVE"
+        : "Deepgram";
   const roomId = `${generateRoomId()}-${language}-${providerLabel}`;
   let scheduledStartAt: Date | null = null;
   let expiresAt: Date | null = null;
@@ -82,6 +87,7 @@ export async function POST(request: Request) {
   );
 
   let invitedUsers: Array<{ id: string; email: string }> = [];
+  let missingUsers: string[] = [];
 
   if (uniqueEmails.length > 0) {
     invitedUsers = await prisma.user.findMany({
@@ -91,11 +97,7 @@ export async function POST(request: Request) {
 
     if (invitedUsers.length !== uniqueEmails.length) {
       const found = new Set(invitedUsers.map((user) => user.email));
-      const missing = uniqueEmails.filter((email) => !found.has(email));
-      return NextResponse.json(
-        { error: `Users not found: ${missing.join(", ")}` },
-        { status: 404 }
-      );
+      missingUsers = uniqueEmails.filter((email) => !found.has(email));
     }
   }
 
@@ -168,7 +170,7 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ id: meeting.id });
+  return NextResponse.json({ id: meeting.id, missingUsers });
 }
 
 export async function GET() {

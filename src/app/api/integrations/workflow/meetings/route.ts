@@ -12,10 +12,91 @@ const createWorkflowMeetingSchema = z.object({
   duration_minutes: z.number().int().positive().optional(),
   invite_emails: z.array(z.string().email()).optional(),
   language: z.enum(["EN", "IT"]).default("EN"),
-  transcription_provider: z.enum(["DEEPGRAM", "VOSK"]).default("DEEPGRAM"),
+  transcription_provider: z.enum(["DEEPGRAM", "DEEPGRAMLIVE", "VOSK"]).default("DEEPGRAM"),
   dataspace_id: z.string().optional().nullable(),
   created_by_email: z.string().email().optional()
 });
+
+const listQuerySchema = z.object({
+  dataspace_id: z.string().optional(),
+  updated_since: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+
+export async function GET(request: Request) {
+  const authError = requireWorkflowKey(request);
+  if (authError) return authError;
+
+  const { searchParams } = new URL(request.url);
+  const parsed = listQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const updatedSince = parsed.data.updated_since
+    ? new Date(parsed.data.updated_since)
+    : null;
+  if (parsed.data.updated_since && (!updatedSince || Number.isNaN(updatedSince.getTime()))) {
+    return NextResponse.json({ error: "Invalid updated_since" }, { status: 400 });
+  }
+
+  const where: Record<string, unknown> = {};
+  if (parsed.data.dataspace_id) {
+    where.dataspaceId = parsed.data.dataspace_id;
+  }
+  if (updatedSince) {
+    where.updatedAt = { gte: updatedSince };
+  }
+
+  const meetings = await prisma.meeting.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: parsed.data.limit,
+    skip: parsed.data.offset,
+    select: {
+      id: true,
+      title: true,
+      roomId: true,
+      dataspaceId: true,
+      createdAt: true,
+      scheduledStartAt: true,
+      expiresAt: true,
+      language: true,
+      transcriptionProvider: true,
+      transcriptionRoundId: true,
+      transcript: {
+        select: {
+          provider: true,
+          roundId: true,
+          transcriptText: true
+        }
+      }
+    }
+  });
+
+  return NextResponse.json({
+    meetings: meetings.map((meeting) => ({
+      id: meeting.id,
+      title: meeting.title,
+      roomId: meeting.roomId,
+      dataspaceId: meeting.dataspaceId,
+      createdAt: meeting.createdAt.toISOString(),
+      scheduledStartAt: meeting.scheduledStartAt ? meeting.scheduledStartAt.toISOString() : null,
+      expiresAt: meeting.expiresAt ? meeting.expiresAt.toISOString() : null,
+      language: meeting.language,
+      transcriptionProvider: meeting.transcriptionProvider,
+      transcriptionRoundId: meeting.transcriptionRoundId,
+      meetingTranscript: meeting.transcript
+        ? {
+            provider: meeting.transcript.provider,
+            roundId: meeting.transcript.roundId,
+            transcriptText: meeting.transcript.transcriptText
+          }
+        : null
+    }))
+  });
+}
 
 export async function POST(request: Request) {
   const authError = requireWorkflowKey(request);
@@ -39,7 +120,12 @@ export async function POST(request: Request) {
     created_by_email: createdByEmail
   } = parsed.data;
 
-  const providerLabel = transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram";
+  const providerLabel =
+    transcriptionProvider === "VOSK"
+      ? "Vosk"
+      : transcriptionProvider === "DEEPGRAMLIVE"
+        ? "DEEPGRAMLIVE"
+        : "Deepgram";
   const roomId = `${generateRoomId()}-${language}-${providerLabel}`;
   let scheduledStartAt: Date | null = null;
   let expiresAt: Date | null = null;

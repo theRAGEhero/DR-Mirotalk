@@ -8,7 +8,7 @@ export const createMeetingSchema = z.object({
   durationMinutes: z.number().int().positive().optional(),
   inviteEmails: z.array(z.string().email("Invalid email")).optional(),
   language: z.enum(["EN", "IT"]).default("EN"),
-  transcriptionProvider: z.enum(["DEEPGRAM", "VOSK"]).default("DEEPGRAM"),
+  transcriptionProvider: z.enum(["DEEPGRAM", "DEEPGRAMLIVE", "VOSK"]).default("DEEPGRAM"),
   dataspaceId: z.string().optional().nullable(),
   isPublic: z.boolean().optional().default(false),
   requiresApproval: z.boolean().optional().default(false),

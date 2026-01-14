@@ -74,6 +74,10 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
   const [error, setError] = useState<string | null>(null);
   const [logId, setLogId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pendingGuestInvites, setPendingGuestInvites] = useState<string[]>([]);
+  const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
+  const [guestInviteStatus, setGuestInviteStatus] = useState<string | null>(null);
+  const [guestInviteSending, setGuestInviteSending] = useState(false);
 
   useEffect(() => {
     if (!initialMeeting) return;
@@ -157,6 +161,8 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
     event.preventDefault();
     setError(null);
     setLogId(null);
+    setPendingGuestInvites([]);
+    setGuestInviteStatus(null);
     setLoading(true);
 
     if (isPublic && !dataspaceId) {
@@ -208,7 +214,49 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
       return;
     }
 
-    router.push(`/meetings/${data.id ?? initialMeeting?.id}`);
+    const meetingId = data.id ?? initialMeeting?.id ?? null;
+    const missing = Array.isArray(data?.missingUsers) ? data.missingUsers : [];
+    if (meetingId && missing.length > 0) {
+      setCreatedMeetingId(meetingId);
+      setPendingGuestInvites(missing);
+      return;
+    }
+
+    if (meetingId) {
+      router.push(`/meetings/${meetingId}`);
+    }
+  }
+
+  async function handleSendGuestInvites() {
+    if (!createdMeetingId || pendingGuestInvites.length === 0) return;
+    setGuestInviteSending(true);
+    setGuestInviteStatus(null);
+
+    const results = await Promise.all(
+      pendingGuestInvites.map(async (email) => {
+        const response = await fetch(`/api/meetings/${createdMeetingId}/invite-guest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const payload = await response.json().catch(() => null);
+        return { email, ok: response.ok, error: payload?.error ?? null };
+      })
+    );
+
+    const failed = results.filter((result) => !result.ok);
+    if (failed.length > 0) {
+      setGuestInviteStatus(`Some invites failed: ${failed.map((item) => item.email).join(", ")}`);
+    } else {
+      setGuestInviteStatus("Guest invites sent.");
+    }
+    setGuestInviteSending(false);
+  }
+
+  function handleOpenMeeting() {
+    if (createdMeetingId) {
+      router.push(`/meetings/${createdMeetingId}`);
+    }
   }
 
   return (
@@ -296,6 +344,17 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
                 className="h-4 w-4"
               />
               Deepgram (fast)
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="radio"
+                name="provider"
+                value="DEEPGRAMLIVE"
+                checked={provider === "DEEPGRAMLIVE"}
+                onChange={(event) => setProvider(event.target.value)}
+                className="h-4 w-4"
+              />
+              Deepgram Live
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -393,6 +452,38 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
         </div>
         <p className="mt-1 text-xs text-slate-500">Separate emails with commas or new lines.</p>
       </div>
+
+      {pendingGuestInvites.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Some emails are not registered.</p>
+          <p className="mt-1 text-xs text-amber-800">
+            You can send them a guest invite with two options: register & attend, or attend as a visitor.
+          </p>
+          <p className="mt-2 text-xs text-amber-800">
+            Missing users: {pendingGuestInvites.join(", ")}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSendGuestInvites}
+              className="dr-button px-3 py-2 text-xs"
+              disabled={guestInviteSending}
+            >
+              {guestInviteSending ? "Sending..." : "Send guest invites"}
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenMeeting}
+              className="dr-button-outline px-3 py-2 text-xs"
+            >
+              Open meeting
+            </button>
+          </div>
+          {guestInviteStatus ? (
+            <p className="mt-2 text-xs text-amber-900">{guestInviteStatus}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="space-y-1 text-sm">

@@ -186,21 +186,26 @@ export default async function DashboardPage() {
       statusLabel: isMeetingActive(meeting) ? "Active" : "Expired",
       expiresLabel: formatDateTime(meeting.expiresAt),
       language: meeting.language,
-    providerLabel: meeting.transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram",
-    dataspaceLabel:
-      meeting.dataspace?.personalOwnerId === session.user.id
-        ? "My Data Space"
-        : meeting.dataspace?.name ?? "No dataspace",
-    dataspaceKey:
-      meeting.dataspace?.personalOwnerId === session.user.id
-        ? "personal"
-        : meeting.dataspace?.id ?? "none",
-    isPublic: meeting.isPublic,
-    isHidden: meeting.isHidden,
-    isPast: Boolean(
-      (meeting.expiresAt && meeting.expiresAt < now) ||
-        (!meeting.expiresAt && meeting.scheduledStartAt && meeting.scheduledStartAt < now && !meeting.isActive)
-    ),
+      providerLabel:
+        meeting.transcriptionProvider === "VOSK"
+          ? "Vosk"
+          : meeting.transcriptionProvider === "DEEPGRAMLIVE"
+            ? "Deepgram Live"
+            : "Deepgram",
+      dataspaceLabel:
+        meeting.dataspace?.personalOwnerId === session.user.id
+          ? "My Data Space"
+          : meeting.dataspace?.name ?? "No dataspace",
+      dataspaceKey:
+        meeting.dataspace?.personalOwnerId === session.user.id
+          ? "personal"
+          : meeting.dataspace?.id ?? "none",
+      isPublic: meeting.isPublic,
+      isHidden: meeting.isHidden,
+      isPast: Boolean(
+        (meeting.expiresAt && meeting.expiresAt < now) ||
+          (!meeting.expiresAt && meeting.scheduledStartAt && meeting.scheduledStartAt < now && !meeting.isActive)
+      ),
       joinStatus,
       canJoin,
       canDelete: session.user.role === "ADMIN" || meeting.createdById === session.user.id,

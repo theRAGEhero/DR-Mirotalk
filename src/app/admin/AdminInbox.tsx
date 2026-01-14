@@ -17,6 +17,14 @@ type Payload = {
   unreadCount: number;
 };
 
+function getPayloadError(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  if ("error" in value && typeof (value as { error?: unknown }).error === "string") {
+    return (value as { error: string }).error;
+  }
+  return null;
+}
+
 export function AdminInbox() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -36,7 +44,7 @@ export function AdminInbox() {
     const payload = (await response.json().catch(() => null)) as Payload | null;
     setLoading(false);
     if (!response.ok || !payload) {
-      setError(payload?.error ?? "Unable to load inbox");
+      setError(getPayloadError(payload) ?? "Unable to load inbox");
       return;
     }
     setMessages(payload.messages ?? []);

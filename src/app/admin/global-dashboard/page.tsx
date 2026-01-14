@@ -54,7 +54,12 @@ export default async function GlobalDashboardPage() {
     statusLabel: isMeetingActive(meeting) ? "Active" : "Expired",
     expiresLabel: formatDateTime(meeting.expiresAt),
     language: meeting.language,
-    providerLabel: meeting.transcriptionProvider === "VOSK" ? "Vosk" : "Deepgram",
+    providerLabel:
+      meeting.transcriptionProvider === "VOSK"
+        ? "Vosk"
+        : meeting.transcriptionProvider === "DEEPGRAMLIVE"
+          ? "Deepgram Live"
+          : "Deepgram",
     dataspaceLabel:
       meeting.dataspace?.personalOwnerId === session.user.id
         ? "My Data Space"

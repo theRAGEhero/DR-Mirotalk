@@ -143,6 +143,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   );
 
   let invitedUsers: Array<{ id: string; email: string }> = [];
+  let missingUsers: string[] = [];
 
   if (uniqueEmails.length > 0) {
     invitedUsers = await prisma.user.findMany({
@@ -152,11 +153,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     if (invitedUsers.length !== uniqueEmails.length) {
       const found = new Set(invitedUsers.map((user) => user.email));
-      const missing = uniqueEmails.filter((email) => !found.has(email));
-      return NextResponse.json(
-        { error: `Users not found: ${missing.join(", ")}` },
-        { status: 404 }
-      );
+      missingUsers = uniqueEmails.filter((email) => !found.has(email));
     }
   }
 
@@ -208,5 +205,5 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     );
   }
 
-  return NextResponse.json({ id: updated.id });
+  return NextResponse.json({ id: updated.id, missingUsers });
 }

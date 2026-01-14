@@ -8,6 +8,7 @@ import { MeetingActions } from "@/app/meetings/[id]/MeetingActions";
 import { TranscriptionAutoLink } from "@/app/meetings/[id]/TranscriptionAutoLink";
 import { MeetingInviteActions } from "@/app/meetings/[id]/MeetingInviteActions";
 import { MeetingParticipation } from "@/app/meetings/[id]/MeetingParticipation";
+import { LiveTranscriptPanel } from "@/app/meetings/[id]/LiveTranscriptPanel";
 
 export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -86,7 +87,12 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
   const statusLabel = active ? "Active" : "Expired";
   const languageLabel = meeting.language;
   const providerLabel =
-    meeting.transcriptionProvider === "VOSK" ? "Vosk (privacy friendly)" : "Deepgram";
+    meeting.transcriptionProvider === "VOSK"
+      ? "Vosk (privacy friendly)"
+      : meeting.transcriptionProvider === "DEEPGRAMLIVE"
+        ? "Deepgram Live"
+        : "Deepgram";
+  const showLiveTranscript = meeting.transcriptionProvider === "DEEPGRAMLIVE";
 
   return (
     <div className="space-y-6">
@@ -117,17 +123,22 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <EmbedCall
-        embedUrl={embedUrl}
-        isActive={active}
-        hasBaseUrl={Boolean(baseUrl)}
-        statusLabel={statusLabel}
-        languageLabel={languageLabel}
-        providerLabel={providerLabel}
-        joinUrl={joinUrl}
-        meetingId={meeting.id}
-        canManage={canManage}
-      />
+      <div className="flex flex-col gap-4 lg:flex-row">
+        {showLiveTranscript ? <LiveTranscriptPanel roomId={meeting.roomId} /> : null}
+        <div className="flex-1">
+          <EmbedCall
+            embedUrl={embedUrl}
+            isActive={active}
+            hasBaseUrl={Boolean(baseUrl)}
+            statusLabel={statusLabel}
+            languageLabel={languageLabel}
+            providerLabel={providerLabel}
+            joinUrl={joinUrl}
+            meetingId={meeting.id}
+            canManage={canManage}
+          />
+        </div>
+      </div>
 
       <div className="dr-card p-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

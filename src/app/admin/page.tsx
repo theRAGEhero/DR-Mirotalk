@@ -14,27 +14,49 @@ type ServiceStatus = {
   detail: string;
 };
 
-async function checkService(label: string, baseUrl: string | undefined): Promise<ServiceStatus> {
+async function checkService(
+  label: string,
+  baseUrl: string | undefined,
+  healthPath = "/api/rounds",
+  headers?: Record<string, string>,
+  displayBaseUrl?: string
+): Promise<ServiceStatus> {
   if (!baseUrl) {
-    return { label, baseUrl: "", status: "unknown", detail: "Not configured" };
+    return {
+      label,
+      baseUrl: displayBaseUrl ?? "",
+      status: "unknown",
+      detail: "Not configured"
+    };
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/rounds`, {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}${healthPath}`, {
       method: "GET",
       cache: "no-store",
-      signal: controller.signal
+      signal: controller.signal,
+      headers
     });
     clearTimeout(timeout);
     if (response.ok) {
-      return { label, baseUrl, status: "online", detail: "OK" };
+      return { label, baseUrl: displayBaseUrl ?? baseUrl, status: "online", detail: "OK" };
     }
-    return { label, baseUrl, status: "offline", detail: `HTTP ${response.status}` };
+    return {
+      label,
+      baseUrl: displayBaseUrl ?? baseUrl,
+      status: "offline",
+      detail: `HTTP ${response.status}`
+    };
   } catch (error) {
     clearTimeout(timeout);
-    return { label, baseUrl, status: "offline", detail: "Unreachable" };
+    return {
+      label,
+      baseUrl: displayBaseUrl ?? baseUrl,
+      status: "offline",
+      detail: "Unreachable"
+    };
   }
 }
 
@@ -49,11 +71,22 @@ export default async function AdminHomePage() {
     return <p className="text-sm text-slate-500">Access denied.</p>;
   }
 
-  const [usersCount, meetingsCount, deepgramStatus, voskStatus, jobs] = await Promise.all([
+  const liveBridgeKey = process.env.LIVE_BRIDGE_API_KEY;
+  const liveBridgeBase = process.env.LIVE_BRIDGE_BASE_URL;
+  const liveBridgeHealthBase = liveBridgeBase?.replace(/\/recSyncBridge\/?$/, "");
+  const [usersCount, meetingsCount, deepgramStatus, voskStatus, liveStatus, jobs] =
+    await Promise.all([
     prisma.user.count(),
     prisma.meeting.count({ where: { isHidden: false } }),
     checkService("Deepgram-modular", process.env.DEEPGRAM_BASE_URL),
     checkService("Vosk-modular", process.env.VOSK_BASE_URL),
+    checkService(
+      "Deepgram Live bridge",
+      liveBridgeHealthBase ?? liveBridgeBase,
+      "/health",
+      undefined,
+      liveBridgeBase
+    ),
     prisma.transcriptionJob.findMany({
       orderBy: { updatedAt: "desc" },
       take: 50,
@@ -112,7 +145,7 @@ export default async function AdminHomePage() {
       <div className="dr-card p-6">
         <h2 className="text-lg font-semibold text-slate-900">Transcription services</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {[deepgramStatus, voskStatus].map((service) => (
+          {[deepgramStatus, voskStatus, liveStatus].map((service) => (
             <div
               key={service.label}
               className="rounded-2xl border border-slate-200 bg-white/70 px-4 py-4"
