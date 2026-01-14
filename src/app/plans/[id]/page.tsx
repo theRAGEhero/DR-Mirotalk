@@ -3,7 +3,12 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ParticipantViewClient } from "@/app/plans/[id]/ParticipantViewClient";
 import { PlanParticipation } from "@/app/plans/[id]/PlanParticipation";
-import { buildLegacySegments, buildPlanSegmentsFromBlocks } from "@/lib/planSchedule";
+import {
+  buildLegacySegments,
+  buildPlanSegmentsFromBlocks,
+  type PlanBlockInput,
+  type PlanBlockType
+} from "@/lib/planSchedule";
 import Link from "next/link";
 
 export default async function PlanParticipantPage({ params }: { params: { id: string } }) {
@@ -64,9 +69,26 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
     return <p className="text-sm text-slate-600">Access denied.</p>;
   }
 
+  const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce<PlanBlockInput[]>(
+    (acc, block) => {
+      const type = block.type as PlanBlockType;
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+        return acc;
+      }
+      acc.push({
+        id: block.id,
+        type,
+        durationSeconds: block.durationSeconds,
+        roundNumber: block.roundNumber ?? null,
+        posterId: block.posterId ?? null
+      });
+      return acc;
+    },
+    []
+  );
   const schedule =
-    plan.blocks.length > 0
-      ? buildPlanSegmentsFromBlocks(plan.startAt, plan.blocks)
+    normalizedBlocks.length > 0
+      ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
       : buildLegacySegments({
           startAt: plan.startAt,
           roundsCount: plan.roundsCount,
@@ -193,7 +215,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
         meditationAudioUrl={plan.meditationAudioUrl}
         blocks={plan.blocks.map((block) => ({
           id: block.id,
-          type: block.type,
+          type: block.type as PlanBlockType,
           durationSeconds: block.durationSeconds,
           roundNumber: block.roundNumber,
           meditationAnimationId: block.meditationAnimationId ?? null,

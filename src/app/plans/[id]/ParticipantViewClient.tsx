@@ -94,9 +94,14 @@ export function ParticipantViewClient({
   const [now, setNow] = useState<number | null>(null);
   const [offsetMs, setOffsetMs] = useState<number | null>(null);
   const [meetingByRound, setMeetingByRound] = useState<Record<number, string>>({});
-  const [meditationSessions, setMeditationSessions] = useState<
-    Array<{ id: string; meditationIndex: number; roundAfter: number | null; transcriptText: string | null; createdAt: string }>
-  >([]);
+  type MeditationSession = {
+    id: string;
+    meditationIndex: number;
+    roundAfter: number | null;
+    transcriptText: string | null;
+    createdAt: string;
+  };
+  const [meditationSessions, setMeditationSessions] = useState<MeditationSession[]>([]);
   const [sendingMeditation, setSendingMeditation] = useState(false);
   const [completedMeditations, setCompletedMeditations] = useState<Set<number>>(
     () => new Set()
@@ -170,7 +175,9 @@ export function ParticipantViewClient({
       if (!response.ok) return;
       const payload = await response.json().catch(() => null);
       if (!active) return;
-      const sessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
+      const sessions: MeditationSession[] = Array.isArray(payload?.sessions)
+        ? payload.sessions
+        : [];
       setMeditationSessions(sessions);
       setCompletedMeditations(
         new Set(sessions.map((session) => session.meditationIndex))

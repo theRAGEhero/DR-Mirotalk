@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { createPlanSchema } from "@/lib/validators";
-import { buildPlanSegmentsFromBlocks, buildLegacySegments } from "@/lib/planSchedule";
+import {
+  buildPlanSegmentsFromBlocks,
+  buildLegacySegments,
+  type PlanBlockInput,
+  type PlanBlockType
+} from "@/lib/planSchedule";
 import crypto from "crypto";
 
 function generateRoomId() {
@@ -46,6 +51,8 @@ function buildDefaultBlocks(data: {
   meditationBetweenRounds: boolean;
   meditationAtEnd: boolean;
   meditationDurationMinutes: number;
+  meditationAnimationId?: string | null;
+  meditationAudioUrl?: string | null;
 }) {
   const blocks: BlockInput[] = [];
   const roundDurationSeconds = data.roundDurationMinutes * 60;
@@ -108,9 +115,26 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     orderBy: { orderIndex: "asc" },
     select: { id: true, type: true, durationSeconds: true, roundNumber: true, posterId: true }
   });
+  const normalizedBlocks: PlanBlockInput[] = existingBlocks.reduce<PlanBlockInput[]>(
+    (acc, block) => {
+      const type = block.type as PlanBlockType;
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+        return acc;
+      }
+      acc.push({
+        id: block.id,
+        type,
+        durationSeconds: block.durationSeconds,
+        roundNumber: block.roundNumber ?? null,
+        posterId: block.posterId ?? null
+      });
+      return acc;
+    },
+    []
+  );
   const schedule =
-    existingBlocks.length > 0
-      ? buildPlanSegmentsFromBlocks(plan.startAt, existingBlocks)
+    normalizedBlocks.length > 0
+      ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
       : buildLegacySegments({
           startAt: plan.startAt,
           roundsCount: plan.roundsCount,

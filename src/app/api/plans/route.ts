@@ -46,6 +46,8 @@ function buildDefaultBlocks(data: {
   meditationBetweenRounds: boolean;
   meditationAtEnd: boolean;
   meditationDurationMinutes: number;
+  meditationAnimationId?: string | null;
+  meditationAudioUrl?: string | null;
 }) {
   const blocks: BlockInput[] = [];
   const roundDurationSeconds = data.roundDurationMinutes * 60;

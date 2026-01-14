@@ -128,7 +128,7 @@ export async function GET(
         round.pairs.flatMap((pair) => [pair.userAId, pair.userBId]).filter(Boolean)
       )
     )
-  );
+  ).filter((id): id is string => typeof id === "string");
   const participants = participantIds.length
     ? await prisma.user.findMany({
         where: { id: { in: participantIds } },

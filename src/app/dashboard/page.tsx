@@ -6,7 +6,12 @@ import { MeetingsTable } from "@/app/dashboard/MeetingsTable";
 import { UpcomingInvites } from "@/app/dashboard/UpcomingInvites";
 import { CalendarPanel } from "@/app/dashboard/CalendarPanel";
 import { formatDateTime, isMeetingActive } from "@/lib/utils";
-import { buildLegacySegments, buildPlanSegmentsFromBlocks } from "@/lib/planSchedule";
+import {
+  buildLegacySegments,
+  buildPlanSegmentsFromBlocks,
+  type PlanBlockInput,
+  type PlanBlockType
+} from "@/lib/planSchedule";
 import { JoinButton } from "@/components/JoinButton";
 
 export default async function DashboardPage() {
@@ -171,7 +176,7 @@ export default async function DashboardPage() {
       !meeting.isActive || (meeting.expiresAt ? meeting.expiresAt.getTime() < now.getTime() : false);
     const canEdit =
       (session.user.role === "ADMIN" || meeting.createdById === session.user.id) && !isConcluded;
-    const joinStatus =
+    const joinStatus: "PENDING" | "JOINED" | "NONE" =
       meeting.createdById === session.user.id || meetingMemberIds.has(meeting.id)
         ? "JOINED"
         : meetingInviteIds.has(meeting.id)
@@ -215,9 +220,26 @@ export default async function DashboardPage() {
 
   const planRows = plans
     .map((plan) => {
+    const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce<PlanBlockInput[]>(
+      (acc, block) => {
+        const type = block.type as PlanBlockType;
+        if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+          return acc;
+        }
+        acc.push({
+          id: block.id,
+          type,
+          durationSeconds: block.durationSeconds,
+          roundNumber: block.roundNumber ?? null,
+          posterId: block.posterId ?? null
+        });
+        return acc;
+      },
+      []
+    );
     const schedule =
-      plan.blocks.length > 0
-        ? buildPlanSegmentsFromBlocks(plan.startAt, plan.blocks)
+      normalizedBlocks.length > 0
+        ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
         : buildLegacySegments({
             startAt: plan.startAt,
             roundsCount: plan.roundsCount,
@@ -249,13 +271,13 @@ export default async function DashboardPage() {
       isPast: totalEndMs < now.getTime(),
       isPublic: plan.isPublic,
       joinStatus:
-        plan.createdById === session.user.id || planPairIds.has(plan.id)
+        (plan.createdById === session.user.id || planPairIds.has(plan.id)
           ? "JOINED"
           : planParticipantMap.get(plan.id) === "PENDING"
             ? "PENDING"
             : planParticipantMap.get(plan.id) === "APPROVED"
               ? "JOINED"
-              : "NONE",
+              : "NONE") as "PENDING" | "JOINED" | "NONE",
       canJoin: Boolean(
         plan.isPublic && plan.dataspaceId && dataspaceMemberIds.has(plan.dataspaceId)
       ),
@@ -431,11 +453,13 @@ export default async function DashboardPage() {
                     <p className="text-xs text-slate-500">{formatDateTime(item.date)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {item.join?.isPublic ? (
+                    {"join" in item && item.join?.isPublic ? (
                       <JoinButton
                         resourceType={item.type === "Meeting" ? "meeting" : "plan"}
                         resourceId={item.id}
-                        initialStatus={item.join.joinStatus}
+                        initialStatus={
+                          item.join.joinStatus as "PENDING" | "JOINED" | "NONE"
+                        }
                         canJoin={item.join.canJoin}
                       />
                     ) : null}
@@ -472,11 +496,13 @@ export default async function DashboardPage() {
                     <p className="text-xs text-slate-500">{formatDateTime(item.startsAt)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {item.join?.isPublic ? (
+                    {"join" in item && item.join?.isPublic ? (
                       <JoinButton
                         resourceType={item.type === "Meeting" ? "meeting" : "plan"}
                         resourceId={item.id}
-                        initialStatus={item.join.joinStatus}
+                        initialStatus={
+                          item.join.joinStatus as "PENDING" | "JOINED" | "NONE"
+                        }
                         canJoin={item.join.canJoin}
                       />
                     ) : null}

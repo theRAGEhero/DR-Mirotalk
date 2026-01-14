@@ -4,7 +4,9 @@ import { getSession } from "@/lib/session";
 import {
   buildLegacySegments,
   buildPlanSegmentsFromBlocks,
-  getSegmentAtTime
+  getSegmentAtTime,
+  type PlanBlockInput,
+  type PlanBlockType
 } from "@/lib/planSchedule";
 
 export async function GET(
@@ -94,10 +96,28 @@ export async function GET(
     return NextResponse.json({ error: "Plan not found" }, { status: 404 });
   }
 
+  const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce<PlanBlockInput[]>(
+    (acc, block) => {
+      const type = block.type as PlanBlockType;
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+        return acc;
+      }
+      acc.push({
+        id: block.id,
+        type,
+        durationSeconds: block.durationSeconds,
+        roundNumber: block.roundNumber ?? null,
+        posterId: block.posterId ?? null
+      });
+      return acc;
+    },
+    []
+  );
+
   const now = new Date();
   const schedule =
-    plan.blocks && plan.blocks.length > 0
-      ? buildPlanSegmentsFromBlocks(plan.startAt, plan.blocks)
+    normalizedBlocks.length > 0
+      ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
       : buildLegacySegments({
           startAt: plan.startAt,
           roundsCount: plan.roundsCount,
