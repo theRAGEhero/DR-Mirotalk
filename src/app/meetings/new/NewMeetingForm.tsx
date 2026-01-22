@@ -17,6 +17,7 @@ type InitialMeeting = {
   expiresAt: string | null;
   language: string;
   transcriptionProvider: string;
+  timezone: string | null;
   dataspaceId: string | null;
   isPublic: boolean;
   requiresApproval: boolean;
@@ -78,6 +79,11 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
   const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
   const [guestInviteStatus, setGuestInviteStatus] = useState<string | null>(null);
   const [guestInviteSending, setGuestInviteSending] = useState(false);
+  const [timezone, setTimezone] = useState("");
+  const resolvedTimezone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    []
+  );
 
   useEffect(() => {
     if (!initialMeeting) return;
@@ -102,11 +108,18 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
     }
     setLanguage(initialMeeting.language || "EN");
     setProvider(initialMeeting.transcriptionProvider || "DEEPGRAM");
+    setTimezone(initialMeeting.timezone ?? "");
     setDataspaceId(initialMeeting.dataspaceId ?? "");
     setIsPublic(Boolean(initialMeeting.isPublic));
     setRequiresApproval(Boolean(initialMeeting.requiresApproval));
     setCapacity(initialMeeting.capacity ?? "");
   }, [initialMeeting]);
+
+  useEffect(() => {
+    if (!timezone) {
+      setTimezone(resolvedTimezone);
+    }
+  }, [resolvedTimezone, timezone]);
 
   const inviteQuery = useMemo(() => {
     const tokens = inviteEmails.split(/[,\n]/);
@@ -171,6 +184,9 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
       return;
     }
 
+    const startAt =
+      date && startTime ? new Date(`${date}T${startTime}`).toISOString() : undefined;
+
     const isEdit = mode === "edit" && initialMeeting?.id;
     const response = await fetch(isEdit ? `/api/meetings/${initialMeeting?.id}` : "/api/meetings", {
       method: isEdit ? "PATCH" : "POST",
@@ -178,6 +194,7 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
       body: JSON.stringify({
         title,
         description,
+        startAt,
         date: date || undefined,
         startTime: startTime || undefined,
         durationMinutes: durationMinutes || undefined,
@@ -187,6 +204,7 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
           .filter(Boolean),
         language,
         transcriptionProvider: provider,
+        timezone: timezone || resolvedTimezone,
         dataspaceId: dataspaceId || null,
         isPublic,
         requiresApproval,

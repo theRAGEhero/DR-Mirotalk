@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    users: members.map((member) => ({
+    users: members.map((member: (typeof members)[number]) => ({
       id: member.user.id,
       email: member.user.email
     }))

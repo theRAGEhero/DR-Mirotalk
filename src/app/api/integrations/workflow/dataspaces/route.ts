@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    dataspaces: dataspaces.map((space) => ({
+    dataspaces: dataspaces.map((space: (typeof dataspaces)[number]) => ({
       id: space.id,
       name: space.personalOwnerId ? "My Data Space" : space.name,
       isPrivate: space.isPrivate

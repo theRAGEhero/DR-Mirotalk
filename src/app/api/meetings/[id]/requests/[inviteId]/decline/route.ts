@@ -22,7 +22,8 @@ export async function POST(
 
   const isAdmin = session.user.role === "ADMIN";
   const isHost = meeting.members.some(
-    (member) => member.userId === session.user.id && member.role === "HOST"
+    (member: (typeof meeting.members)[number]) =>
+      member.userId === session.user.id && member.role === "HOST"
   );
 
   if (!isAdmin && !isHost) {

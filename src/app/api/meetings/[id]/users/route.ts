@@ -25,7 +25,9 @@ export async function GET(
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isHost = meeting.members.some((member) => member.role === "HOST");
+  const isHost = meeting.members.some(
+    (member: (typeof meeting.members)[number]) => member.role === "HOST"
+  );
   if (!isAdmin && !isHost) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -42,7 +44,9 @@ export async function GET(
     select: { userId: true }
   });
 
-  const excludeIds = memberIds.map((member) => member.userId);
+  const excludeIds = memberIds.map(
+    (member: (typeof memberIds)[number]) => member.userId
+  );
 
   const users = await prisma.user.findMany({
     where: {

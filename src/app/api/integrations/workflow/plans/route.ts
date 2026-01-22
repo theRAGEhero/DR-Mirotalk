@@ -18,6 +18,7 @@ const createWorkflowPlanSchema = z.object({
   rounds_count: z.number().int().positive().max(100),
   sync_mode: z.enum(["SERVER", "CLIENT"]).default("SERVER"),
   max_participants_per_room: z.number().int().min(2).max(12).default(2),
+  timezone: z.string().max(100).optional().nullable(),
   dataspace_id: z.string().optional().nullable(),
   participants: z.array(participantSchema).min(2),
   created_by_email: z.string().email().optional()
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
       title: true,
       dataspaceId: true,
       startAt: true,
+      timezone: true,
       roundsCount: true,
       roundDurationMinutes: true,
       language: true,
@@ -100,11 +102,12 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    plans: plans.map((plan) => ({
+    plans: plans.map((plan: (typeof plans)[number]) => ({
       id: plan.id,
       title: plan.title,
       dataspaceId: plan.dataspaceId,
       startAt: plan.startAt.toISOString(),
+      timezone: plan.timezone ?? null,
       roundsCount: plan.roundsCount,
       roundDurationMinutes: plan.roundDurationMinutes,
       language: plan.language,
@@ -178,7 +181,7 @@ export async function POST(request: Request) {
   }
 
   const maxParticipantsPerRoom = parsed.data.max_participants_per_room;
-  let rotation = users.map((user) => user.id);
+  let rotation = users.map((user: (typeof users)[number]) => user.id);
   const roundsData = [] as Array<{
     roundNumber: number;
     pairs: Array<{ userAId: string; userBId: string | null; roomId: string }>;
@@ -212,6 +215,7 @@ export async function POST(request: Request) {
       title: parsed.data.title,
       createdById: creator.id,
       startAt,
+      timezone: parsed.data.timezone || null,
       roundDurationMinutes: parsed.data.round_duration_minutes,
       roundsCount: parsed.data.rounds_count,
       syncMode: parsed.data.sync_mode,

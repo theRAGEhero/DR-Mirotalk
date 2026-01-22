@@ -21,12 +21,14 @@ export async function POST(request: Request) {
   const {
     title,
     description,
+    startAt: startAtRaw,
     date,
     startTime,
     durationMinutes,
     inviteEmails,
     language,
     transcriptionProvider,
+    timezone,
     dataspaceId,
     isPublic,
     requiresApproval,
@@ -42,11 +44,17 @@ export async function POST(request: Request) {
   let scheduledStartAt: Date | null = null;
   let expiresAt: Date | null = null;
 
-  if (startTime && !date) {
+  if (startTime && !date && !startAtRaw) {
     return NextResponse.json({ error: "Select a date for the start/end time." }, { status: 400 });
   }
 
-  if (date && startTime) {
+  if (startAtRaw) {
+    const start = new Date(startAtRaw);
+    if (Number.isNaN(start.getTime())) {
+      return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
+    }
+    scheduledStartAt = start;
+  } else if (date && startTime) {
     const start = new Date(`${date}T${startTime}`);
     if (Number.isNaN(start.getTime())) {
       return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
@@ -109,6 +117,7 @@ export async function POST(request: Request) {
       createdById: session.user.id,
       scheduledStartAt,
       expiresAt,
+      timezone: timezone || null,
       language,
       transcriptionProvider,
       dataspaceId: dataspaceId || null,

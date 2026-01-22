@@ -36,6 +36,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const user =
+    (await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true }
+    })) ??
+    (session.user.email
+      ? await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true }
+        })
+      : null);
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = posterSchema.safeParse(body);
   if (!parsed.success) {
@@ -46,7 +61,7 @@ export async function POST(request: Request) {
     data: {
       title: parsed.data.title,
       content: parsed.data.content,
-      createdById: session.user.id
+      createdById: user.id
     },
     select: {
       id: true,

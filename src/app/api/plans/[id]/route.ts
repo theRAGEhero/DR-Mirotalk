@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/session";
 import { createPlanSchema } from "@/lib/validators";
 import {
@@ -115,8 +116,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     orderBy: { orderIndex: "asc" },
     select: { id: true, type: true, durationSeconds: true, roundNumber: true, posterId: true }
   });
-  const normalizedBlocks: PlanBlockInput[] = existingBlocks.reduce<PlanBlockInput[]>(
-    (acc, block) => {
+  const normalizedBlocks: PlanBlockInput[] = existingBlocks.reduce(
+    (acc: PlanBlockInput[], block: (typeof existingBlocks)[number]) => {
       const type = block.type as PlanBlockType;
       if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
         return acc;
@@ -228,7 +229,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: "Poster not found." }, { status: 404 });
     }
   }
-  let rotation = users.map((user) => user.id);
+  let rotation = users.map((user: (typeof users)[number]) => user.id);
   const roundsData = [] as Array<{
     roundNumber: number;
     pairs: Array<{ userAId: string; userBId: string | null; roomId: string }>;
@@ -276,7 +277,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const firstMeditationBlock = blocksInput.find((block) => block.type === "MEDITATION");
   const firstMeditationSeconds = firstMeditationBlock?.durationSeconds ?? 300;
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.planRound.deleteMany({ where: { planId: plan.id } });
     await tx.planBlock.deleteMany({ where: { planId: plan.id } });
     await tx.plan.update({
@@ -285,6 +286,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         title: parsed.data.title,
         description: parsed.data.description || null,
         startAt,
+        timezone: parsed.data.timezone || null,
         roundDurationMinutes: Math.max(1, Math.round(firstRoundSeconds / 60)),
         roundsCount: roundBlocks.length,
         syncMode: parsed.data.syncMode,

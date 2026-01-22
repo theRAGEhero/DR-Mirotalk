@@ -90,6 +90,7 @@ export default async function DashboardPage() {
         title: true,
         createdAt: true,
         startAt: true,
+        timezone: true,
         roundsCount: true,
         roundDurationMinutes: true,
         syncMode: true,
@@ -153,25 +154,40 @@ export default async function DashboardPage() {
   const now = new Date();
 
   const dataspaceMemberIds = new Set(
-    dataspaceMembers.map((member) => member.dataspaceId)
+    dataspaceMembers.map(
+      (member: (typeof dataspaceMembers)[number]) => member.dataspaceId
+    )
   );
-  dataspaces.forEach((dataspace) => {
+  dataspaces.forEach((dataspace: (typeof dataspaces)[number]) => {
     if (dataspace.personalOwnerId === session.user.id) {
       dataspaceMemberIds.add(dataspace.id);
     }
   });
-  const meetingMemberIds = new Set(meetingMembers.map((member) => member.meetingId));
-  const meetingInviteIds = new Set(meetingInvites.map((invite) => invite.meetingId));
+  const meetingMemberIds = new Set(
+    meetingMembers.map(
+      (member: (typeof meetingMembers)[number]) => member.meetingId
+    )
+  );
+  const meetingInviteIds = new Set(
+    meetingInvites.map(
+      (invite: (typeof meetingInvites)[number]) => invite.meetingId
+    )
+  );
   const planParticipantMap = new Map(
-    planParticipants.map((participant) => [participant.planId, participant.status])
+    planParticipants.map(
+      (participant: (typeof planParticipants)[number]) => [
+        participant.planId,
+        participant.status
+      ]
+    )
   );
   const planPairIds = new Set(
     planPairs
-      .map((pair) => pair.planRound.planId)
-      .filter((planId): planId is string => Boolean(planId))
+      .map((pair: (typeof planPairs)[number]) => pair.planRound.planId)
+      .filter((planId: string | null): planId is string => Boolean(planId))
   );
 
-  const rows = meetings.map((meeting) => {
+  const rows = meetings.map((meeting: (typeof meetings)[number]) => {
     const isConcluded =
       !meeting.isActive || (meeting.expiresAt ? meeting.expiresAt.getTime() < now.getTime() : false);
     const canEdit =
@@ -189,7 +205,7 @@ export default async function DashboardPage() {
       id: meeting.id,
       title: meeting.title,
       statusLabel: isMeetingActive(meeting) ? "Active" : "Expired",
-      expiresLabel: formatDateTime(meeting.expiresAt),
+      expiresLabel: formatDateTime(meeting.expiresAt, meeting.timezone),
       language: meeting.language,
       providerLabel:
         meeting.transcriptionProvider === "VOSK"
@@ -219,9 +235,9 @@ export default async function DashboardPage() {
   });
 
   const planRows = plans
-    .map((plan) => {
-    const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce<PlanBlockInput[]>(
-      (acc, block) => {
+    .map((plan: (typeof plans)[number]) => {
+      const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
+        (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
         const type = block.type as PlanBlockType;
         if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
           return acc;
@@ -234,9 +250,9 @@ export default async function DashboardPage() {
           posterId: block.posterId ?? null
         });
         return acc;
-      },
-      []
-    );
+        },
+        []
+      );
     const schedule =
       normalizedBlocks.length > 0
         ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
@@ -257,7 +273,7 @@ export default async function DashboardPage() {
     return {
       id: plan.id,
       title: plan.title,
-      startLabel: formatDateTime(plan.startAt),
+      startLabel: formatDateTime(plan.startAt, plan.timezone),
       startAtMs: plan.startAt.getTime(),
       roundsCount: plan.roundsCount,
       dataspaceLabel:
@@ -284,10 +300,12 @@ export default async function DashboardPage() {
       canEdit
     };
   })
-  .sort((a, b) => b.startAtMs - a.startAtMs);
+  .sort(
+    (a: { startAtMs: number }, b: { startAtMs: number }) => b.startAtMs - a.startAtMs
+  );
 
   const textPastCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const textRows = texts.map((text) => {
+  const textRows = texts.map((text: (typeof texts)[number]) => {
     const snippet = text.content.trim().split("\n")[0]?.slice(0, 80) ?? "";
     return {
       id: text.id,
@@ -306,15 +324,24 @@ export default async function DashboardPage() {
   });
 
   const meetingJoinMap = new Map(
-    rows.map((row) => [row.id, { isPublic: row.isPublic, joinStatus: row.joinStatus, canJoin: row.canJoin }])
+    rows.map((row: (typeof rows)[number]) => [
+      row.id,
+      { isPublic: row.isPublic, joinStatus: row.joinStatus, canJoin: row.canJoin }
+    ])
   );
   const planJoinMap = new Map(
-    planRows.map((row) => [row.id, { isPublic: row.isPublic, joinStatus: row.joinStatus, canJoin: row.canJoin }])
+    planRows.map((row: (typeof planRows)[number]) => [
+      row.id,
+      { isPublic: row.isPublic, joinStatus: row.joinStatus, canJoin: row.canJoin }
+    ])
   );
 
   const upcomingMeetings = meetings
-    .filter((meeting) => meeting.scheduledStartAt && meeting.scheduledStartAt > now)
-    .map((meeting) => ({
+    .filter(
+      (meeting: (typeof meetings)[number]) =>
+        meeting.scheduledStartAt && meeting.scheduledStartAt > now
+    )
+    .map((meeting: (typeof meetings)[number]) => ({
       id: meeting.id,
       title: meeting.title,
       startsAt: meeting.scheduledStartAt as Date,
@@ -324,8 +351,8 @@ export default async function DashboardPage() {
     }));
 
   const upcomingPlans = plans
-    .filter((plan) => plan.startAt > now)
-    .map((plan) => ({
+    .filter((plan: (typeof plans)[number]) => plan.startAt > now)
+    .map((plan: (typeof plans)[number]) => ({
       id: plan.id,
       title: plan.title,
       startsAt: plan.startAt,
@@ -339,7 +366,7 @@ export default async function DashboardPage() {
     .slice(0, 6);
 
   const recentItems = [
-    ...meetings.map((meeting) => ({
+    ...meetings.map((meeting: (typeof meetings)[number]) => ({
       id: meeting.id,
       title: meeting.title,
       type: "Meeting" as const,
@@ -347,7 +374,7 @@ export default async function DashboardPage() {
       href: `/meetings/${meeting.id}`,
       join: meetingJoinMap.get(meeting.id)
     })),
-    ...plans.map((plan) => ({
+    ...plans.map((plan: (typeof plans)[number]) => ({
       id: plan.id,
       title: plan.title,
       type: "Plan" as const,
@@ -355,7 +382,7 @@ export default async function DashboardPage() {
       href: `/plans/${plan.id}`,
       join: planJoinMap.get(plan.id)
     })),
-    ...texts.map((text) => ({
+    ...texts.map((text: (typeof texts)[number]) => ({
       id: text.id,
       title: text.content.trim().split("\n")[0]?.slice(0, 60) || "Text draft",
       type: "Text" as const,
@@ -367,7 +394,7 @@ export default async function DashboardPage() {
     .slice(0, 6);
 
   const calendarEvents = [
-    ...meetings.map((meeting) => {
+    ...meetings.map((meeting: (typeof meetings)[number]) => {
       const start = meeting.scheduledStartAt ?? meeting.createdAt;
       return {
         id: `meeting-${meeting.id}`,
@@ -377,14 +404,14 @@ export default async function DashboardPage() {
         href: `/meetings/${meeting.id}`
       };
     }),
-    ...plans.map((plan) => ({
+    ...plans.map((plan: (typeof plans)[number]) => ({
       id: `plan-${plan.id}`,
       title: plan.title,
       type: "Plan" as const,
       startsAt: plan.startAt.toISOString(),
       href: `/plans/${plan.id}`
     })),
-    ...texts.map((text) => ({
+    ...texts.map((text: (typeof texts)[number]) => ({
       id: `text-${text.id}`,
       title: text.content.trim().split("\n")[0]?.slice(0, 60) || "Text draft",
       type: "Text" as const,
@@ -394,27 +421,31 @@ export default async function DashboardPage() {
   ];
 
   const upcomingInvites = invites
-    .filter((invite) => {
+    .filter((invite: (typeof invites)[number]) => {
       const startAt = invite.meeting.scheduledStartAt;
       return !startAt || startAt > now;
     })
     .slice(0, 5)
-    .map((invite) => ({
+    .map((invite: (typeof invites)[number]) => ({
       id: invite.id,
       meetingId: invite.meetingId,
       title: invite.meeting.title,
       hostEmail: invite.meeting.createdBy.email,
       scheduledStartAt: invite.meeting.scheduledStartAt
         ? invite.meeting.scheduledStartAt.toISOString()
-        : null
+        : null,
+      timezone: invite.meeting.timezone ?? null
     }));
 
   const dataspaceOptions = [
     { key: "personal", label: "My Data Space" },
     { key: "none", label: "No dataspace" },
     ...dataspaces
-      .filter((dataspace) => !dataspace.personalOwnerId)
-      .map((dataspace) => ({ key: dataspace.id, label: dataspace.name }))
+      .filter((dataspace: (typeof dataspaces)[number]) => !dataspace.personalOwnerId)
+      .map((dataspace: (typeof dataspaces)[number]) => ({
+        key: dataspace.id,
+        label: dataspace.name
+      }))
   ];
 
   return (

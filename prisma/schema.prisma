@@ -116,6 +116,7 @@ model Meeting {
   createdBy   User            @relation("MeetingCreator", fields: [createdById], references: [id])
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @default(now()) @updatedAt
+  timezone    String?
   scheduledStartAt DateTime?
   expiresAt   DateTime?
   isActive    Boolean         @default(true)
@@ -212,6 +213,7 @@ model Plan {
   dataspaceId          String?
   dataspace            Dataspace?  @relation(fields: [dataspaceId], references: [id], onDelete: SetNull)
   startAt              DateTime
+  timezone             String?
   roundDurationMinutes Int
   roundsCount          Int
   syncMode             String      @default("SERVER")

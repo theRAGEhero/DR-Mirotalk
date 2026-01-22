@@ -37,9 +37,15 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const membership = meeting.members.find((member) => member.userId === session.user.id);
+  const membership = meeting.members.find(
+    (member: (typeof meeting.members)[number]) =>
+      member.userId === session.user.id
+  );
   const isDataspaceMember = meeting.dataspace
-    ? meeting.dataspace.members.some((member) => member.userId === session.user.id)
+    ? meeting.dataspace.members.some(
+        (member: (typeof meeting.dataspace.members)[number]) =>
+          member.userId === session.user.id
+      )
     : false;
   const pendingInvite = await prisma.meetingInvite.findUnique({
     where: {
@@ -63,7 +69,9 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           inviteId={pendingInvite.id}
           meetingTitle={meeting.title}
           hostEmail={
-            meeting.members.find((member) => member.role === "HOST")?.user.email ?? "Host"
+            meeting.members.find(
+              (member: (typeof meeting.members)[number]) => member.role === "HOST"
+            )?.user.email ?? "Host"
           }
         />
       );
@@ -144,19 +152,25 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Expires</p>
-            <p className="text-sm text-slate-700">{formatDateTime(meeting.expiresAt)}</p>
+            <p className="text-sm text-slate-700">
+              {formatDateTime(meeting.expiresAt, meeting.timezone)}
+            </p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Starts</p>
             <p className="text-sm text-slate-700">
-              {meeting.scheduledStartAt ? formatDateTime(meeting.scheduledStartAt) : "Not scheduled"}
+              {meeting.scheduledStartAt
+                ? formatDateTime(meeting.scheduledStartAt, meeting.timezone)
+                : "Not scheduled"}
             </p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Host</p>
             <p className="text-sm text-slate-700">
-              {meeting.members.find((member) => member.role === "HOST")?.user.email ??
-                "-"}
+              {meeting.members.find(
+                (member: (typeof meeting.members)[number]) =>
+                  member.role === "HOST"
+              )?.user.email ?? "-"}
             </p>
           </div>
           <div>
@@ -175,8 +189,11 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
         isMember={Boolean(membership)}
         pendingStatus={pendingInvite?.status ?? null}
         pendingRequests={meeting.invites
-          .filter((invite) => invite.status === "PENDING")
-          .map((invite) => ({
+          .filter(
+            (invite: (typeof meeting.invites)[number]) =>
+              invite.status === "PENDING"
+          )
+          .map((invite: (typeof meeting.invites)[number]) => ({
             id: invite.id,
             email: invite.user.email
           }))}

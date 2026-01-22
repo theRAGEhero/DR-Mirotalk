@@ -56,21 +56,26 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isParticipant = plan.rounds.some((round) =>
-    round.pairs.some(
-      (pair) => pair.userAId === session.user.id || pair.userBId === session.user.id
-    )
+  const isParticipant = plan.rounds.some(
+    (round: (typeof plan.rounds)[number]) =>
+      round.pairs.some(
+        (pair: (typeof round.pairs)[number]) =>
+          pair.userAId === session.user.id || pair.userBId === session.user.id
+      )
   );
   const isDataspaceMember = plan.dataspace
-    ? plan.dataspace.members.some((member) => member.userId === session.user.id)
+    ? plan.dataspace.members.some(
+        (member: (typeof plan.dataspace.members)[number]) =>
+          member.userId === session.user.id
+      )
     : false;
 
   if (!isAdmin && !isParticipant && !(plan.isPublic && isDataspaceMember)) {
     return <p className="text-sm text-slate-600">Access denied.</p>;
   }
 
-  const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce<PlanBlockInput[]>(
-    (acc, block) => {
+  const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
+    (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
       const type = block.type as PlanBlockType;
       if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
         return acc;
@@ -103,19 +108,24 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
   const canEdit = (isAdmin || plan.createdById === session.user.id) && Date.now() <= totalEndMs;
 
   const participantRecord = plan.participants.find(
-    (participant) => participant.userId === session.user.id
+    (participant: (typeof plan.participants)[number]) =>
+      participant.userId === session.user.id
   );
   const pendingRequests = plan.participants
-    .filter((participant) => participant.status === "PENDING")
-    .map((participant) => ({
+    .filter(
+      (participant: (typeof plan.participants)[number]) =>
+        participant.status === "PENDING"
+    )
+    .map((participant: (typeof plan.participants)[number]) => ({
       id: participant.id,
       email: participant.user.email
     }));
 
-  const assignments = plan.rounds.map((round) => {
+  const assignments = plan.rounds.map(
+    (round: (typeof plan.rounds)[number]) => {
     const rooms = new Map<string, string[]>();
     const meetingByRoom = new Map<string, string>();
-    round.pairs.forEach((pair) => {
+    round.pairs.forEach((pair: (typeof round.pairs)[number]) => {
       if (!rooms.has(pair.roomId)) {
         rooms.set(pair.roomId, []);
       }
@@ -152,10 +162,11 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
     };
   });
 
-  const roundGroups = plan.rounds.map((round) => {
+  const roundGroups = plan.rounds.map(
+    (round: (typeof plan.rounds)[number]) => {
     const rooms = new Map<string, string[]>();
     const meetingByRoom = new Map<string, string>();
-    round.pairs.forEach((pair) => {
+    round.pairs.forEach((pair: (typeof round.pairs)[number]) => {
       if (!rooms.has(pair.roomId)) {
         rooms.set(pair.roomId, []);
       }
@@ -177,9 +188,20 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
     };
   });
 
-  const meditationBlocks = plan.blocks.filter((block) => block.type === "MEDITATION");
+  const meditationBlocks = plan.blocks.filter(
+    (block: (typeof plan.blocks)[number]) => block.type === "MEDITATION"
+  );
   const meditationTotalMinutes = meditationBlocks.length
-    ? Math.max(1, Math.round(meditationBlocks.reduce((sum, block) => sum + block.durationSeconds, 0) / 60))
+    ? Math.max(
+        1,
+        Math.round(
+          meditationBlocks.reduce(
+            (sum: number, block: (typeof meditationBlocks)[number]) =>
+              sum + block.durationSeconds,
+            0
+          ) / 60
+        )
+      )
     : 0;
 
   return (
@@ -213,7 +235,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
         meditationDurationMinutes={plan.meditationDurationMinutes}
         meditationAnimationId={plan.meditationAnimationId}
         meditationAudioUrl={plan.meditationAudioUrl}
-        blocks={plan.blocks.map((block) => ({
+        blocks={plan.blocks.map((block: (typeof plan.blocks)[number]) => ({
           id: block.id,
           type: block.type as PlanBlockType,
           durationSeconds: block.durationSeconds,

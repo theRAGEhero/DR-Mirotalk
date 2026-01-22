@@ -176,7 +176,7 @@ export default async function AdminHomePage() {
       </div>
 
       <TranscriptionJobsTable
-        initialJobs={jobs.map((job) => ({
+        initialJobs={jobs.map((job: (typeof jobs)[number]) => ({
           id: job.id,
           kind: job.kind,
           status: job.status,

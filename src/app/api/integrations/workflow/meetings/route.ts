@@ -15,6 +15,7 @@ const createWorkflowMeetingSchema = z.object({
   invite_emails: z.array(z.string().email()).optional(),
   language: z.enum(["EN", "IT"]).default("EN"),
   transcription_provider: z.enum(["DEEPGRAM", "DEEPGRAMLIVE", "VOSK"]).default("DEEPGRAM"),
+  timezone: z.string().max(100).optional().nullable(),
   dataspace_id: z.string().optional().nullable(),
   created_by_email: z.string().email().optional()
 });
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
       createdAt: true,
       scheduledStartAt: true,
       expiresAt: true,
+      timezone: true,
       language: true,
       transcriptionProvider: true,
       transcriptionRoundId: true,
@@ -78,7 +80,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    meetings: meetings.map((meeting) => ({
+    meetings: meetings.map((meeting: (typeof meetings)[number]) => ({
       id: meeting.id,
       title: meeting.title,
       roomId: meeting.roomId,
@@ -86,6 +88,7 @@ export async function GET(request: Request) {
       createdAt: meeting.createdAt.toISOString(),
       scheduledStartAt: meeting.scheduledStartAt ? meeting.scheduledStartAt.toISOString() : null,
       expiresAt: meeting.expiresAt ? meeting.expiresAt.toISOString() : null,
+      timezone: meeting.timezone ?? null,
       language: meeting.language,
       transcriptionProvider: meeting.transcriptionProvider,
       transcriptionRoundId: meeting.transcriptionRoundId,
@@ -118,6 +121,7 @@ export async function POST(request: Request) {
     invite_emails: inviteEmails,
     language,
     transcription_provider: transcriptionProvider,
+    timezone,
     dataspace_id: dataspaceId,
     created_by_email: createdByEmail
   } = parsed.data;
@@ -201,6 +205,7 @@ export async function POST(request: Request) {
       createdById: creator.id,
       scheduledStartAt,
       expiresAt,
+      timezone: timezone || null,
       language,
       transcriptionProvider,
       dataspaceId: dataspaceId || null,

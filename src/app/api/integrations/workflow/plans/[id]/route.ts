@@ -18,6 +18,7 @@ export async function GET(
       title: true,
       dataspaceId: true,
       startAt: true,
+      timezone: true,
       roundsCount: true,
       roundDurationMinutes: true,
       language: true,
@@ -50,15 +51,16 @@ export async function GET(
     title: plan.title,
     dataspaceId: plan.dataspaceId,
     startAt: plan.startAt.toISOString(),
+    timezone: plan.timezone ?? null,
     roundsCount: plan.roundsCount,
     roundDurationMinutes: plan.roundDurationMinutes,
     language: plan.language,
     transcriptionProvider: plan.transcriptionProvider,
     createdAt: plan.createdAt.toISOString(),
     updatedAt: plan.updatedAt.toISOString(),
-    rounds: plan.rounds.map((round) => ({
+    rounds: plan.rounds.map((round: (typeof plan.rounds)[number]) => ({
       roundNumber: round.roundNumber,
-      pairs: round.pairs.map((pair) => ({
+      pairs: round.pairs.map((pair: (typeof round.pairs)[number]) => ({
         roomId: pair.roomId,
         userAId: pair.userAId,
         userBId: pair.userBId,

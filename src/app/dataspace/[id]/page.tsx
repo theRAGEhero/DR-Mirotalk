@@ -62,7 +62,10 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
     return <p className="text-sm text-slate-600">Dataspace not found.</p>;
   }
 
-  const isMember = dataspace.members.some((member) => member.userId === session.user.id);
+  const isMember = dataspace.members.some(
+    (member: (typeof dataspace.members)[number]) =>
+      member.userId === session.user.id
+  );
   const isAdmin = session.user.role === "ADMIN";
   const isOwner =
     dataspace.personalOwnerId === session.user.id || dataspace.createdById === session.user.id;
@@ -74,18 +77,34 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
 
   const now = new Date();
   const upcomingMeetings = dataspace.meetings.filter(
-    (meeting) => meeting.scheduledStartAt && meeting.scheduledStartAt > now
+    (meeting: (typeof dataspace.meetings)[number]) =>
+      meeting.scheduledStartAt && meeting.scheduledStartAt > now
   );
-  const upcomingPlans = dataspace.plans.filter((plan) => plan.startAt > now);
-  const meetingMemberIds = new Set(meetingMembers.map((member) => member.meetingId));
-  const meetingInviteIds = new Set(meetingInvites.map((invite) => invite.meetingId));
+  const upcomingPlans = dataspace.plans.filter(
+    (plan: (typeof dataspace.plans)[number]) => plan.startAt > now
+  );
+  const meetingMemberIds = new Set(
+    meetingMembers.map(
+      (member: (typeof meetingMembers)[number]) => member.meetingId
+    )
+  );
+  const meetingInviteIds = new Set(
+    meetingInvites.map(
+      (invite: (typeof meetingInvites)[number]) => invite.meetingId
+    )
+  );
   const planParticipantMap = new Map(
-    planParticipants.map((participant) => [participant.planId, participant.status])
+    planParticipants.map(
+      (participant: (typeof planParticipants)[number]) => [
+        participant.planId,
+        participant.status
+      ]
+    )
   );
   const planPairIds = new Set(
     planPairs
-      .map((pair) => pair.planRound.planId)
-      .filter((planId): planId is string => Boolean(planId))
+      .map((pair: (typeof planPairs)[number]) => pair.planRound.planId)
+      .filter((planId: string | null): planId is string => Boolean(planId))
   );
 
   return (
@@ -125,7 +144,7 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               {upcomingMeetings.length === 0 ? (
                 <p className="text-slate-500">No upcoming calls.</p>
               ) : (
-                upcomingMeetings.map((meeting) => {
+                upcomingMeetings.map((meeting: (typeof upcomingMeetings)[number]) => {
                   const joinStatus =
                     meeting.createdById === session.user.id || meetingMemberIds.has(meeting.id)
                       ? "JOINED"
@@ -136,7 +155,9 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
                     <div key={meeting.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
                       <div>
                         <p className="font-medium text-slate-900">{meeting.title}</p>
-                        <p className="text-xs text-slate-500">{formatDateTime(meeting.scheduledStartAt)}</p>
+                        <p className="text-xs text-slate-500">
+                          {formatDateTime(meeting.scheduledStartAt, meeting.timezone)}
+                        </p>
                       </div>
                       {meeting.isPublic ? (
                         <JoinButton
@@ -156,7 +177,7 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               {upcomingPlans.length === 0 ? (
                 <p className="text-slate-500">No upcoming plans.</p>
               ) : (
-                upcomingPlans.map((plan) => {
+                upcomingPlans.map((plan: (typeof upcomingPlans)[number]) => {
                   const joinStatus =
                     plan.createdById === session.user.id || planPairIds.has(plan.id)
                       ? "JOINED"
@@ -169,7 +190,9 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
                     <div key={plan.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
                       <div>
                         <p className="font-medium text-slate-900">{plan.title}</p>
-                        <p className="text-xs text-slate-500">{formatDateTime(plan.startAt)}</p>
+                        <p className="text-xs text-slate-500">
+                          {formatDateTime(plan.startAt, plan.timezone)}
+                        </p>
                       </div>
                       {plan.isPublic ? (
                         <JoinButton
@@ -192,7 +215,8 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
             {dataspace.meetings.length === 0 ? (
               <p className="text-slate-500">No meetings yet.</p>
             ) : (
-              dataspace.meetings.map((meeting) => {
+              dataspace.meetings.map(
+                (meeting: (typeof dataspace.meetings)[number]) => {
                 const joinStatus =
                   meeting.createdById === session.user.id || meetingMemberIds.has(meeting.id)
                     ? "JOINED"
@@ -236,11 +260,13 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               {dataspace.members.length === 0 ? (
                 <span className="text-slate-500">No members yet.</span>
               ) : (
-                dataspace.members.map((member) => (
+                dataspace.members.map(
+                  (member: (typeof dataspace.members)[number]) => (
                   <span key={member.id} className="rounded-full bg-white px-3 py-1">
                     {member.user.email}
                   </span>
-                ))
+                  )
+                )
               )}
             </div>
           </div>
@@ -254,7 +280,9 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               <div className="mt-4">
                 <DataspaceInviteForm
                   dataspaceId={dataspace.id}
-                  existingEmails={dataspace.members.map((member) => member.user.email)}
+                  existingEmails={dataspace.members.map(
+                    (member: (typeof dataspace.members)[number]) => member.user.email
+                  )}
                 />
               </div>
             </div>
@@ -266,7 +294,8 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               {dataspace.texts.length === 0 ? (
                 <p className="text-slate-500">No text notes yet.</p>
               ) : (
-                dataspace.texts.map((text) => (
+                dataspace.texts.map(
+                  (text: (typeof dataspace.texts)[number]) => (
                   <div key={text.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
                     <div>
                       <p className="font-medium text-slate-900">
@@ -281,7 +310,8 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
                       Open
                     </Link>
                   </div>
-                ))
+                  )
+                )
               )}
             </div>
           </div>
@@ -292,7 +322,7 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               {dataspace.plans.length === 0 ? (
                 <p className="text-slate-500">No plans yet.</p>
               ) : (
-                dataspace.plans.map((plan) => {
+                dataspace.plans.map((plan: (typeof dataspace.plans)[number]) => {
                   const joinStatus =
                     plan.createdById === session.user.id || planPairIds.has(plan.id)
                       ? "JOINED"
@@ -305,7 +335,9 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
                     <div key={plan.id} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white/70 px-3 py-2">
                       <div>
                         <p className="font-medium text-slate-900">{plan.title}</p>
-                        <p className="text-xs text-slate-500">{formatDateTime(plan.startAt)}</p>
+                        <p className="text-xs text-slate-500">
+                          {formatDateTime(plan.startAt, plan.timezone)}
+                        </p>
                       </div>
                       <div className="flex items-center gap-3">
                         {plan.isPublic ? (

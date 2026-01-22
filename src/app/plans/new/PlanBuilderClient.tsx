@@ -32,6 +32,7 @@ type Props = {
     maxParticipantsPerRoom: number;
     language: string;
     transcriptionProvider: string;
+    timezone: string | null;
     meditationEnabled: boolean;
     meditationAtStart: boolean;
     meditationBetweenRounds: boolean;
@@ -203,6 +204,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
   const [maxParticipantsPerRoom, setMaxParticipantsPerRoom] = useState(2);
   const [language, setLanguage] = useState("EN");
   const [provider, setProvider] = useState("DEEPGRAM");
+  const [timezone, setTimezone] = useState("");
+  const resolvedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [defaultMeditationAnimationId, setDefaultMeditationAnimationId] = useState(
     MEDITATION_ANIMATIONS[0]?.id ?? ""
   );
@@ -288,6 +291,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     setMaxParticipantsPerRoom(initialPlan.maxParticipantsPerRoom);
     setLanguage(initialPlan.language);
     setProvider(initialPlan.transcriptionProvider);
+    setTimezone(initialPlan.timezone ?? "");
     const fallbackAnimation = MEDITATION_ANIMATIONS[0]?.id ?? "";
     const initialAnimation = initialPlan.meditationAnimationId ?? fallbackAnimation;
     setDefaultMeditationAnimationId(initialAnimation);
@@ -327,6 +331,12 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       );
     }
   }, [initialPlan]);
+
+  useEffect(() => {
+    if (!timezone) {
+      setTimezone(resolvedTimezone);
+    }
+  }, [resolvedTimezone, timezone]);
 
   useEffect(() => {
     if (mode !== "create") return;
@@ -806,7 +816,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       return;
     }
 
-    const startAt = `${startDate}T${startTime}`;
+    const startAt = new Date(`${startDate}T${startTime}`).toISOString();
     const effectiveBlocks =
       planBlocks.length > 0
         ? planBlocks
@@ -842,6 +852,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         maxParticipantsPerRoom,
         language,
         transcriptionProvider: provider,
+        timezone: timezone || resolvedTimezone,
         meditationEnabled: meditationBlocks.length > 0,
         meditationAtStart: false,
         meditationBetweenRounds: false,

@@ -34,6 +34,7 @@ export default async function GlobalDashboardPage() {
         id: true,
         title: true,
         startAt: true,
+        timezone: true,
         roundsCount: true,
         isPublic: true,
         dataspace: { select: { id: true, name: true, personalOwnerId: true } }
@@ -48,11 +49,11 @@ export default async function GlobalDashboardPage() {
   ]);
 
   const now = new Date();
-  const rows = meetings.map((meeting) => ({
+  const rows = meetings.map((meeting: (typeof meetings)[number]) => ({
     id: meeting.id,
     title: meeting.title,
     statusLabel: isMeetingActive(meeting) ? "Active" : "Expired",
-    expiresLabel: formatDateTime(meeting.expiresAt),
+    expiresLabel: formatDateTime(meeting.expiresAt, meeting.timezone),
     language: meeting.language,
     providerLabel:
       meeting.transcriptionProvider === "VOSK"
@@ -83,13 +84,16 @@ export default async function GlobalDashboardPage() {
   const dataspaceOptions = [
     { key: "personal", label: "My Data Space" },
     { key: "none", label: "No dataspace" },
-    ...dataspaces.map((dataspace) => ({ key: dataspace.id, label: dataspace.name }))
+    ...dataspaces.map((dataspace: (typeof dataspaces)[number]) => ({
+      key: dataspace.id,
+      label: dataspace.name
+    }))
   ];
 
-  const planRows = plans.map((plan) => ({
+  const planRows = plans.map((plan: (typeof plans)[number]) => ({
     id: plan.id,
     title: plan.title,
-    startLabel: formatDateTime(plan.startAt),
+    startLabel: formatDateTime(plan.startAt, plan.timezone),
     startAtMs: plan.startAt.getTime(),
     isPast: plan.startAt < now,
     roundsCount: plan.roundsCount,
@@ -106,7 +110,7 @@ export default async function GlobalDashboardPage() {
     canJoin: false
   }));
 
-  const textRows = texts.map((text) => {
+  const textRows = texts.map((text: (typeof texts)[number]) => {
     const snippet = text.content.trim().split("\n")[0]?.slice(0, 80) ?? "";
     return {
       id: text.id,

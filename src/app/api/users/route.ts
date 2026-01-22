@@ -33,7 +33,10 @@ export async function GET(request: Request) {
   });
 
   const filtered = excludeSet.size
-    ? users.filter((user) => !excludeSet.has(user.email.toLowerCase()))
+    ? users.filter(
+        (user: (typeof users)[number]) =>
+          !excludeSet.has(user.email.toLowerCase())
+      )
     : users;
 
   return NextResponse.json({ users: filtered });
