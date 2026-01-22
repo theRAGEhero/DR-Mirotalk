@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { SignOutButton } from "@/components/SignOutButton";
-import { FeedbackButton } from "@/components/FeedbackButton";
 
 export function AppHeader() {
   const { data: session, status } = useSession();
@@ -117,7 +116,6 @@ export function AppHeader() {
         <div className="flex flex-col items-start gap-1 text-xs text-slate-500 lg:items-end">
           <span className="break-all">{session.user.email}</span>
           <div className="flex items-center gap-3">
-            <FeedbackButton />
             <Link href="/account" className="text-xs font-semibold text-slate-600 hover:text-slate-900">
               Profile settings
             </Link>

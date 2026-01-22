@@ -8,15 +8,23 @@ type InviteRow = {
   title: string;
   hostEmail: string;
   scheduledStartAt: string | null;
+  timezone: string | null;
 };
 
 type Props = {
   invites: InviteRow[];
 };
 
-function formatValue(value: string | null) {
+function formatValue(value: string | null, timeZone?: string | null) {
   if (!value) return "No schedule";
-  return new Date(value).toLocaleString();
+  const options: Intl.DateTimeFormatOptions = {
+    dateStyle: "medium",
+    timeStyle: "short"
+  };
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+  return new Intl.DateTimeFormat(undefined, options).format(new Date(value));
 }
 
 export function UpcomingInvites({ invites }: Props) {
@@ -57,7 +65,7 @@ export function UpcomingInvites({ invites }: Props) {
               <div>
                 <p className="font-medium text-slate-900">{invite.title}</p>
                 <p className="text-xs text-slate-500">
-                  Host: {invite.hostEmail} · {formatValue(invite.scheduledStartAt)}
+                  Host: {invite.hostEmail} · {formatValue(invite.scheduledStartAt, invite.timezone)}
                 </p>
               </div>
               <div className="flex items-center gap-2">

@@ -8,6 +8,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true }
+  });
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => null);
   const dataspaceId = body?.dataspaceId ?? null;
 
@@ -27,7 +35,7 @@ export async function POST(request: Request) {
 
   const text = await prisma.text.create({
     data: {
-      createdById: session.user.id,
+      createdById: user.id,
       dataspaceId
     },
     select: { id: true }

@@ -21,7 +21,7 @@ export async function GET() {
   });
 
   return NextResponse.json({
-    feedbacks: feedbacks.map((entry) => ({
+    feedbacks: feedbacks.map((entry: (typeof feedbacks)[number]) => ({
       id: entry.id,
       userEmail: entry.userEmail,
       pagePath: entry.pagePath,

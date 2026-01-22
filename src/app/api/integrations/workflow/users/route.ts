@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireWorkflowKey } from "@/app/api/integrations/workflow/utils";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const authError = requireWorkflowKey(request);
   if (authError) return authError;
@@ -20,7 +22,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    users: members.map((member) => ({
+    users: members.map((member: (typeof members)[number]) => ({
       id: member.user.id,
       email: member.user.email
     }))

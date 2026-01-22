@@ -33,9 +33,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isHost = meeting.members.some((member) => member.role === "HOST");
+  const isHost = meeting.members.some(
+    (member: (typeof meeting.members)[number]) => member.role === "HOST"
+  );
   const isDataspaceMember = meeting.dataspace
-    ? meeting.dataspace.members.some((member) => member.userId === session.user.id)
+    ? meeting.dataspace.members.some(
+        (member: (typeof meeting.dataspace.members)[number]) =>
+          member.userId === session.user.id
+      )
     : false;
 
   if (!isAdmin && !isHost && !(meeting.isPublic && isDataspaceMember)) {

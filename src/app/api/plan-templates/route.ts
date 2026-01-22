@@ -40,7 +40,7 @@ export async function GET() {
     }
   });
 
-  const parsed = templates.map((template) => {
+  const parsed = templates.map((template: (typeof templates)[number]) => {
     let blocks = [];
     try {
       blocks = JSON.parse(template.blocksJson);
@@ -67,6 +67,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const user =
+    (await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true }
+    })) ??
+    (session.user.email
+      ? await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true }
+        })
+      : null);
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = createTemplateSchema.safeParse(body);
   if (!parsed.success) {
@@ -78,7 +93,7 @@ export async function POST(request: Request) {
       name: parsed.data.name,
       description: parsed.data.description || null,
       blocksJson: JSON.stringify(parsed.data.blocks),
-      createdById: session.user.id,
+      createdById: user.id,
       isPublic: Boolean(parsed.data.isPublic)
     },
     select: { id: true }

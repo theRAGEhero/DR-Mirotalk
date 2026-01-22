@@ -58,13 +58,18 @@ export async function GET(
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isParticipant = plan.rounds.some((round) =>
-    round.pairs.some(
-      (pair) => pair.userAId === session.user.id || pair.userBId === session.user.id
-    )
+  const isParticipant = plan.rounds.some(
+    (round: (typeof plan.rounds)[number]) =>
+      round.pairs.some(
+        (pair: (typeof round.pairs)[number]) =>
+          pair.userAId === session.user.id || pair.userBId === session.user.id
+      )
   );
   const isDataspaceMember = plan.dataspace
-    ? plan.dataspace.members.some((member) => member.userId === session.user.id)
+    ? plan.dataspace.members.some(
+        (member: (typeof plan.dataspace.members)[number]) =>
+          member.userId === session.user.id
+      )
     : false;
 
   if (!isAdmin && !isParticipant && !(plan.isPublic && isDataspaceMember)) {
@@ -93,16 +98,19 @@ export async function GET(
     })
   ]);
 
-  const meetingPairs = plan.rounds.flatMap((round) =>
-    round.pairs
-      .filter((pair) => pair.meetingId)
-      .map((pair) => ({
-        roundNumber: round.roundNumber,
-        meetingId: pair.meetingId as string,
-        participants: [pair.userA?.email, pair.userB?.email].filter(Boolean) as string[]
-      }))
+  const meetingPairs = plan.rounds.flatMap(
+    (round: (typeof plan.rounds)[number]) =>
+      round.pairs
+        .filter((pair: (typeof round.pairs)[number]) => pair.meetingId)
+        .map((pair: (typeof round.pairs)[number]) => ({
+          roundNumber: round.roundNumber,
+          meetingId: pair.meetingId as string,
+          participants: [pair.userA?.email, pair.userB?.email].filter(Boolean) as string[]
+        }))
   );
-  const uniqueMeetingIds = Array.from(new Set(meetingPairs.map((pair) => pair.meetingId)));
+  const uniqueMeetingIds = Array.from(
+    new Set(meetingPairs.map((pair: (typeof meetingPairs)[number]) => pair.meetingId))
+  );
   const meetingTranscripts = uniqueMeetingIds.length
     ? await prisma.meetingTranscript.findMany({
         where: { meetingId: { in: uniqueMeetingIds } },
@@ -114,7 +122,7 @@ export async function GET(
       })
     : [];
   const transcriptByMeeting = new Map(
-    meetingTranscripts.map((item) => {
+    meetingTranscripts.map((item: (typeof meetingTranscripts)[number]) => {
       const text = item.transcriptText && item.transcriptText.trim().length > 0
         ? item.transcriptText
         : extractTranscriptText(item.transcriptJson);
@@ -124,11 +132,13 @@ export async function GET(
 
   const participantIds = Array.from(
     new Set(
-      plan.rounds.flatMap((round) =>
-        round.pairs.flatMap((pair) => [pair.userAId, pair.userBId]).filter(Boolean)
+      plan.rounds.flatMap((round: (typeof plan.rounds)[number]) =>
+        round.pairs
+          .flatMap((pair: (typeof round.pairs)[number]) => [pair.userAId, pair.userBId])
+          .filter(Boolean)
       )
     )
-  );
+  ).filter((id): id is string => typeof id === "string");
   const participants = participantIds.length
     ? await prisma.user.findMany({
         where: { id: { in: participantIds } },
@@ -137,24 +147,26 @@ export async function GET(
     : [];
 
   return NextResponse.json({
-    textEntries: textEntries.map((entry) => ({
+    textEntries: textEntries.map((entry: (typeof textEntries)[number]) => ({
       blockId: entry.blockId,
       content: entry.content,
       userEmail: entry.user.email
     })),
-    meditationSessions: meditationSessions.map((session) => ({
+    meditationSessions: meditationSessions.map(
+      (session: (typeof meditationSessions)[number]) => ({
       meditationIndex: session.meditationIndex,
       roundAfter: session.roundAfter,
       transcriptText: session.transcriptText ?? "",
       userEmail: session.user.email,
       createdAt: session.createdAt.toISOString()
-    })),
-    meetingTranscripts: meetingPairs.map((pair) => ({
+      })
+    ),
+    meetingTranscripts: meetingPairs.map((pair: (typeof meetingPairs)[number]) => ({
       meetingId: pair.meetingId,
       roundNumber: pair.roundNumber,
       participants: pair.participants,
       transcriptText: transcriptByMeeting.get(pair.meetingId) ?? ""
     })),
-    participants: participants.map((participant) => participant.email)
+    participants: participants.map((participant: (typeof participants)[number]) => participant.email)
   });
 }

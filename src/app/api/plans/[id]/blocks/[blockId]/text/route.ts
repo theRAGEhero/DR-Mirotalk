@@ -29,7 +29,10 @@ export async function GET(
 
   const isAdmin = session.user.role === "ADMIN";
   const isDataspaceMember = plan.dataspace
-    ? plan.dataspace.members.some((member) => member.userId === session.user.id)
+    ? plan.dataspace.members.some(
+        (member: (typeof plan.dataspace.members)[number]) =>
+          member.userId === session.user.id
+      )
     : false;
   const isParticipant =
     (await prisma.planParticipant.findUnique({
@@ -109,7 +112,10 @@ export async function POST(
 
   const isAdmin = session.user.role === "ADMIN";
   const isDataspaceMember = plan.dataspace
-    ? plan.dataspace.members.some((member) => member.userId === session.user.id)
+    ? plan.dataspace.members.some(
+        (member: (typeof plan.dataspace.members)[number]) =>
+          member.userId === session.user.id
+      )
     : false;
   const isParticipant =
     (await prisma.planParticipant.findUnique({

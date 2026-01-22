@@ -25,14 +25,26 @@ export default async function PlansPage() {
   });
 
   const now = new Date();
-  const plansWithEnd = plans.map((plan) => ({
+  const plansWithEnd = plans.map((plan: (typeof plans)[number]) => ({
     plan,
     endAt: getPlanEndTime(plan.startAt, plan.roundsCount, plan.roundDurationMinutes)
   }));
 
-  const upcomingPlans = plansWithEnd.filter(({ plan }) => plan.startAt > now);
-  const activePlans = plansWithEnd.filter(({ plan, endAt }) => plan.startAt <= now && endAt >= now);
-  const finishedPlans = plansWithEnd.filter(({ endAt }) => endAt < now);
+  const upcomingPlans = plansWithEnd.filter(
+    ({ plan }: { plan: (typeof plans)[number] }) => plan.startAt > now
+  );
+  const activePlans = plansWithEnd.filter(
+    ({
+      plan,
+      endAt
+    }: {
+      plan: (typeof plans)[number];
+      endAt: Date;
+    }) => plan.startAt <= now && endAt >= now
+  );
+  const finishedPlans = plansWithEnd.filter(
+    ({ endAt }: { endAt: Date }) => endAt < now
+  );
 
   return (
     <div className="space-y-6">
@@ -73,7 +85,8 @@ export default async function PlansPage() {
                   {section.items.length === 0 ? (
                     <div className="px-4 py-6 text-sm text-slate-500">{section.empty}</div>
                   ) : (
-                    section.items.map(({ plan, endAt }) => (
+                    section.items.map(
+                      ({ plan, endAt }: { plan: (typeof plans)[number]; endAt: Date }) => (
                       <div key={plan.id} className="grid grid-cols-6 gap-4 px-4 py-4 text-sm">
                         <div className="col-span-2">
                           <Link
@@ -83,8 +96,8 @@ export default async function PlansPage() {
                             {plan.title}
                           </Link>
                         </div>
-                        <div className="text-slate-600">{formatDateTime(plan.startAt)}</div>
-                        <div className="text-slate-600">{formatDateTime(endAt)}</div>
+                        <div className="text-slate-600">{formatDateTime(plan.startAt, plan.timezone)}</div>
+                        <div className="text-slate-600">{formatDateTime(endAt, plan.timezone)}</div>
                         <div className="text-slate-600">{plan.roundsCount}</div>
                         <div className="text-slate-600">{plan.createdBy.email}</div>
                       </div>

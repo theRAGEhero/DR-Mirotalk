@@ -1,5 +1,9 @@
 import crypto from "crypto";
-import type { Meeting } from "@prisma/client";
+
+type MeetingStatus = {
+  isActive: boolean;
+  expiresAt: Date | null;
+};
 
 export function generateRoomId() {
   return crypto.randomBytes(16).toString("base64url");
@@ -9,13 +13,20 @@ export function generateTempPassword() {
   return crypto.randomBytes(18).toString("base64url");
 }
 
-export function isMeetingActive(meeting: Pick<Meeting, "isActive" | "expiresAt">) {
+export function isMeetingActive(meeting: MeetingStatus) {
   if (!meeting.isActive) return false;
   if (!meeting.expiresAt) return true;
   return meeting.expiresAt.getTime() > Date.now();
 }
 
-export function formatDateTime(value: Date | null) {
+export function formatDateTime(value: Date | null, timeZone?: string | null) {
   if (!value) return "No expiry";
-  return value.toLocaleString();
+  const options: Intl.DateTimeFormatOptions = {
+    dateStyle: "medium",
+    timeStyle: "short"
+  };
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+  return new Intl.DateTimeFormat(undefined, options).format(value);
 }

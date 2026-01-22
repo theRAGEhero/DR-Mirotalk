@@ -28,7 +28,7 @@ export default async function AdminUsersPage() {
     }
   });
 
-  const rows = users.map((user) => ({
+  const rows = users.map((user: (typeof users)[number]) => ({
     id: user.id,
     email: user.email,
     role: user.role,

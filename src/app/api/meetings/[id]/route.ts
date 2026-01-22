@@ -27,7 +27,9 @@ export async function DELETE(
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isHost = meeting.members.some((member) => member.role === "HOST");
+  const isHost = meeting.members.some(
+    (member: (typeof meeting.members)[number]) => member.role === "HOST"
+  );
   const isCreator = meeting.createdById === session.user.id;
 
   if (!isAdmin && !isHost && !isCreator) {
@@ -61,7 +63,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isHost = meeting.members.some((member) => member.role === "HOST");
+  const isHost = meeting.members.some(
+    (member: (typeof meeting.members)[number]) => member.role === "HOST"
+  );
   const isCreator = meeting.createdById === session.user.id;
 
   if (!isAdmin && !isHost && !isCreator) {
@@ -83,26 +87,34 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const {
     title,
     description,
+    startAt: startAtRaw,
     date,
     startTime,
     durationMinutes,
     inviteEmails,
     language,
     transcriptionProvider,
+    timezone,
     dataspaceId,
     isPublic,
     requiresApproval,
     capacity
   } = parsed.data;
 
-  if (startTime && !date) {
+  if (startTime && !date && !startAtRaw) {
     return NextResponse.json({ error: "Select a date for the start/end time." }, { status: 400 });
   }
 
   let scheduledStartAt: Date | null = null;
   let expiresAt: Date | null = null;
 
-  if (date && startTime) {
+  if (startAtRaw) {
+    const start = new Date(startAtRaw);
+    if (Number.isNaN(start.getTime())) {
+      return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
+    }
+    scheduledStartAt = start;
+  } else if (date && startTime) {
     const start = new Date(`${date}T${startTime}`);
     if (Number.isNaN(start.getTime())) {
       return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
@@ -143,6 +155,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   );
 
   let invitedUsers: Array<{ id: string; email: string }> = [];
+  let missingUsers: string[] = [];
 
   if (uniqueEmails.length > 0) {
     invitedUsers = await prisma.user.findMany({
@@ -152,11 +165,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     if (invitedUsers.length !== uniqueEmails.length) {
       const found = new Set(invitedUsers.map((user) => user.email));
-      const missing = uniqueEmails.filter((email) => !found.has(email));
-      return NextResponse.json(
-        { error: `Users not found: ${missing.join(", ")}` },
-        { status: 404 }
-      );
+      missingUsers = uniqueEmails.filter((email) => !found.has(email));
     }
   }
 
@@ -167,6 +176,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       description: description || null,
       scheduledStartAt,
       expiresAt,
+      timezone: timezone || null,
       language,
       transcriptionProvider,
       dataspaceId: dataspaceId || null,
@@ -208,5 +218,5 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     );
   }
 
-  return NextResponse.json({ id: updated.id });
+  return NextResponse.json({ id: updated.id, missingUsers });
 }

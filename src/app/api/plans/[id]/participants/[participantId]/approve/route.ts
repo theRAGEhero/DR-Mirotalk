@@ -41,7 +41,7 @@ export async function POST(
     select: { userAId: true, userBId: true }
   });
   const fixedUsers = new Set<string>();
-  fixedPairs.forEach((pair) => {
+  fixedPairs.forEach((pair: (typeof fixedPairs)[number]) => {
     fixedUsers.add(pair.userAId);
     if (pair.userBId) fixedUsers.add(pair.userBId);
   });

@@ -32,7 +32,9 @@ export async function POST(
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isHost = meeting.members.some((member) => member.role === "HOST");
+  const isHost = meeting.members.some(
+    (member: (typeof meeting.members)[number]) => member.role === "HOST"
+  );
   if (!isAdmin && !isHost) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

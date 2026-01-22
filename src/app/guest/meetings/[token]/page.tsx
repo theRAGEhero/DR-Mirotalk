@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { isMeetingActive } from "@/lib/utils";
+import { GuestJoinCard } from "@/app/guest/meetings/[token]/GuestJoinCard";
 
 export default async function GuestMeetingPage({
   params
@@ -33,9 +34,6 @@ export default async function GuestMeetingPage({
   const baseUrl = process.env.MIROTALK_BASE_URL || "";
   const langCode = meeting.language === "IT" ? "it" : "en";
   const providerCode = meeting.transcriptionProvider === "VOSK" ? "vosk" : "deepgram";
-  const joinUrl = `${baseUrl}/join/${meeting.roomId}?name=${encodeURIComponent(
-    invite.email
-  )}&notify=0&lang=${langCode}&transcriber=${providerCode}`;
 
   return (
     <div className="mx-auto mt-10 max-w-2xl space-y-6">
@@ -51,27 +49,14 @@ export default async function GuestMeetingPage({
         </p>
       </div>
 
-      <div className="dr-card p-6">
-        {active ? (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Join the call without registration.
-            </p>
-            <a
-              href={joinUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="dr-button inline-flex px-4 py-2 text-sm"
-            >
-              Join on MiroTalk
-            </a>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-600">
-            This meeting is no longer active.
-          </p>
-        )}
-      </div>
+      <GuestJoinCard
+        active={active}
+        baseUrl={baseUrl}
+        roomId={meeting.roomId}
+        language={langCode}
+        provider={providerCode}
+        inviteEmail={invite.email}
+      />
 
       <p className="text-xs text-slate-500">
         Prefer to register? <Link href="/register" className="font-semibold text-slate-700 hover:underline">Create an account</Link>

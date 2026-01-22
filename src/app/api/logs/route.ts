@@ -26,6 +26,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const user =
+    (await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true }
+    })) ??
+    (session.user.email
+      ? await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true }
+        })
+      : null);
+
   const body = await request.json().catch(() => null);
   const parsed = logSchema.safeParse(body);
   if (!parsed.success) {
@@ -38,7 +50,7 @@ export async function POST(request: Request) {
       scope: parsed.data.scope,
       message: parsed.data.message,
       meta: safeStringify(parsed.data.meta),
-      userId: session.user.id
+      userId: user?.id ?? null
     }
   });
 

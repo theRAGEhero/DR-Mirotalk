@@ -4,7 +4,9 @@ import { getSession } from "@/lib/session";
 import {
   buildLegacySegments,
   buildPlanSegmentsFromBlocks,
-  getSegmentAtTime
+  getSegmentAtTime,
+  type PlanBlockInput,
+  type PlanBlockType
 } from "@/lib/planSchedule";
 
 export async function GET(
@@ -94,10 +96,28 @@ export async function GET(
     return NextResponse.json({ error: "Plan not found" }, { status: 404 });
   }
 
+  const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
+    (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
+      const type = block.type as PlanBlockType;
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+        return acc;
+      }
+      acc.push({
+        id: block.id,
+        type,
+        durationSeconds: block.durationSeconds,
+        roundNumber: block.roundNumber ?? null,
+        posterId: block.posterId ?? null
+      });
+      return acc;
+    },
+    []
+  );
+
   const now = new Date();
   const schedule =
-    plan.blocks && plan.blocks.length > 0
-      ? buildPlanSegmentsFromBlocks(plan.startAt, plan.blocks)
+    normalizedBlocks.length > 0
+      ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
       : buildLegacySegments({
           startAt: plan.startAt,
           roundsCount: plan.roundsCount,
@@ -145,7 +165,7 @@ export async function GET(
       const roundEnd = new Date(currentSegment.endAtMs);
       const rooms = new Map<string, Set<string>>();
 
-      round.pairs.forEach((pair) => {
+      round.pairs.forEach((pair: (typeof round.pairs)[number]) => {
         if (!rooms.has(pair.roomId)) {
           rooms.set(pair.roomId, new Set());
         }
@@ -193,7 +213,11 @@ export async function GET(
             },
             select: { userId: true }
           });
-          const existingIds = new Set(existingMembers.map((member) => member.userId));
+          const existingIds = new Set(
+            existingMembers.map(
+              (member: (typeof existingMembers)[number]) => member.userId
+            )
+          );
           for (const userId of userIds) {
             if (existingIds.has(userId)) continue;
             await prisma.meetingMember.create({

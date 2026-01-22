@@ -22,7 +22,9 @@ export async function POST(
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  const membership = meeting.members.find((member) => member.userId === session.user.id);
+  const membership = meeting.members.find(
+    (member: (typeof meeting.members)[number]) => member.userId === session.user.id
+  );
   if (membership?.role === "HOST") {
     return NextResponse.json({ error: "Host cannot leave the meeting" }, { status: 400 });
   }

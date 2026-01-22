@@ -42,7 +42,9 @@ export default async function DataspacePage() {
     })
   ]);
 
-  const subscribedIds = new Set(subscriptions.map((sub) => sub.dataspaceId));
+  const subscribedIds = new Set(
+    subscriptions.map((sub: (typeof subscriptions)[number]) => sub.dataspaceId)
+  );
 
   const ensuredPersonal =
     personalDataspace ??
@@ -84,15 +86,17 @@ export default async function DataspacePage() {
     }
   });
 
-  const payload = dataspaces.map((space) => ({
+  const payload = dataspaces.map((space: (typeof dataspaces)[number]) => ({
     id: space.id,
     name: space.name,
     description: space.description,
     createdByEmail: space.createdBy.email,
-    members: space.members.map((member) => ({
+    members: space.members.map(
+      (member: (typeof space.members)[number]) => ({
       id: member.userId,
       email: member.user.email
-    })),
+      })
+    ),
     isPrivate: space.isPrivate,
     meetingsCount: space.meetings.length,
     plansCount: space.plans.length,
@@ -122,10 +126,12 @@ export default async function DataspacePage() {
           name: ensuredPersonal.name,
           description: ensuredPersonal.description,
           createdByEmail: ensuredPersonal.createdBy.email,
-          members: ensuredPersonal.members.map((member) => ({
-            id: member.userId,
-            email: member.user.email
-          })),
+          members: ensuredPersonal.members.map(
+            (member: (typeof ensuredPersonal.members)[number]) => ({
+              id: member.userId,
+              email: member.user.email
+            })
+          ),
           isPrivate: ensuredPersonal.isPrivate,
           meetingsCount: ensuredPersonal.meetings.length,
           plansCount: ensuredPersonal.plans.length,

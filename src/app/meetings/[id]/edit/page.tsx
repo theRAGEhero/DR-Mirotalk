@@ -22,7 +22,10 @@ export default async function EditMeetingPage({ params }: { params: { id: string
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isHost = meeting.members.some((member) => member.userId === session.user.id && member.role === "HOST");
+  const isHost = meeting.members.some(
+    (member: (typeof meeting.members)[number]) =>
+      member.userId === session.user.id && member.role === "HOST"
+  );
   const isCreator = meeting.createdById === session.user.id;
   const canEdit = isAdmin || isHost || isCreator;
 
@@ -63,6 +66,7 @@ export default async function EditMeetingPage({ params }: { params: { id: string
             expiresAt: meeting.expiresAt?.toISOString() ?? null,
             language: meeting.language,
             transcriptionProvider: meeting.transcriptionProvider,
+            timezone: meeting.timezone ?? null,
             dataspaceId: meeting.dataspaceId,
             isPublic: meeting.isPublic,
             requiresApproval: meeting.requiresApproval,

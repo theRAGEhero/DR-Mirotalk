@@ -33,22 +33,21 @@ export function FeedbackButton() {
   }
 
   return (
-    <div className="relative">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-2">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-full border border-slate-200/80 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900"
+        className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.15)] backdrop-blur hover:border-slate-300 hover:text-slate-900"
       >
         Leave feedback
       </button>
       {open ? (
-        <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_30px_70px_rgba(15,23,42,0.2)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Feedback</p>
-                <p className="text-lg font-semibold text-slate-900">Share your thoughts</p>
-              </div>
+        <div className="relative w-[min(92vw,28rem)] max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_30px_70px_rgba(15,23,42,0.2)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-500">Feedback</p>
+              <p className="text-lg font-semibold text-slate-900">Share your thoughts</p>
+            </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -85,7 +84,6 @@ export function FeedbackButton() {
                 </button>
               </div>
             </form>
-          </div>
         </div>
       ) : null}
     </div>

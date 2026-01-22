@@ -46,6 +46,8 @@ function buildDefaultBlocks(data: {
   meditationBetweenRounds: boolean;
   meditationAtEnd: boolean;
   meditationDurationMinutes: number;
+  meditationAnimationId?: string | null;
+  meditationAudioUrl?: string | null;
 }) {
   const blocks: BlockInput[] = [];
   const roundDurationSeconds = data.roundDurationMinutes * 60;
@@ -157,7 +159,7 @@ export async function POST(request: Request) {
     }
   }
 
-  let rotation = users.map((user) => user.id);
+  let rotation = users.map((user: (typeof users)[number]) => user.id);
   const roundsData = [] as Array<{
     roundNumber: number;
     pairs: Array<{ userAId: string; userBId: string | null; roomId: string }>;
@@ -212,6 +214,7 @@ export async function POST(request: Request) {
       createdById: session.user.id,
       dataspaceId: parsed.data.dataspaceId ?? null,
       startAt,
+      timezone: parsed.data.timezone || null,
       roundDurationMinutes: Math.max(1, Math.round(firstRoundSeconds / 60)),
       roundsCount: roundBlocks.length,
       syncMode: parsed.data.syncMode,

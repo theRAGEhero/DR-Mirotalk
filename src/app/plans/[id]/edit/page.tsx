@@ -2,7 +2,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PlanBuilderClient } from "@/app/plans/new/PlanBuilderClient";
-import { buildPlanSegmentsFromBlocks, buildLegacySegments } from "@/lib/planSchedule";
+import {
+  buildPlanSegmentsFromBlocks,
+  buildLegacySegments,
+  type PlanBlockInput,
+  type PlanBlockType
+} from "@/lib/planSchedule";
 
 export default async function EditPlanPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -45,9 +50,26 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
     return <p className="text-sm text-slate-500">Access denied.</p>;
   }
 
+  const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
+    (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
+      const type = block.type as PlanBlockType;
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+        return acc;
+      }
+      acc.push({
+        id: block.id,
+        type,
+        durationSeconds: block.durationSeconds,
+        roundNumber: block.roundNumber ?? null,
+        posterId: block.posterId ?? null
+      });
+      return acc;
+    },
+    []
+  );
   const schedule =
-    plan.blocks.length > 0
-      ? buildPlanSegmentsFromBlocks(plan.startAt, plan.blocks)
+    normalizedBlocks.length > 0
+      ? buildPlanSegmentsFromBlocks(plan.startAt, normalizedBlocks)
       : buildLegacySegments({
           startAt: plan.startAt,
           roundsCount: plan.roundsCount,
@@ -66,11 +88,13 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
 
   const participantIds = Array.from(
     new Set(
-      plan.rounds.flatMap((round) =>
-        round.pairs.flatMap((pair) => [pair.userAId, pair.userBId].filter(Boolean))
+      plan.rounds.flatMap((round: (typeof plan.rounds)[number]) =>
+        round.pairs.flatMap((pair: (typeof round.pairs)[number]) =>
+          [pair.userAId, pair.userBId].filter(Boolean)
+        )
       )
     )
-  ) as string[];
+  ).filter((id): id is string => typeof id === "string");
 
   const [users, dataspaces] = await Promise.all([
     prisma.user.findMany({
@@ -107,6 +131,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           maxParticipantsPerRoom: plan.maxParticipantsPerRoom,
           language: plan.language,
           transcriptionProvider: plan.transcriptionProvider,
+          timezone: plan.timezone ?? null,
           meditationEnabled: plan.meditationEnabled,
           meditationAtStart: plan.meditationAtStart,
           meditationBetweenRounds: plan.meditationBetweenRounds,
@@ -119,9 +144,9 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           requiresApproval: plan.requiresApproval,
           capacity: plan.capacity,
           participantIds,
-          blocks: plan.blocks.map((block) => ({
+          blocks: plan.blocks.map((block: (typeof plan.blocks)[number]) => ({
             id: block.id,
-            type: block.type,
+            type: block.type as PlanBlockType,
             durationSeconds: block.durationSeconds,
             roundNumber: block.roundNumber,
             posterId: block.posterId,

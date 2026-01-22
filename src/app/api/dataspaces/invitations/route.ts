@@ -17,7 +17,7 @@ export async function GET() {
   });
 
   return NextResponse.json({
-    invites: invites.map((invite) => ({
+    invites: invites.map((invite: (typeof invites)[number]) => ({
       id: invite.id,
       dataspaceId: invite.dataspaceId,
       dataspaceName: invite.dataspace.name

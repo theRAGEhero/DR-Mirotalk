@@ -1,16 +1,28 @@
 import { PrismaClient } from "@prisma/client";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
-export const prisma =
-  global.prisma ||
-  new PrismaClient({
-    log: ["error"]
-  });
+const isBuildPhase = process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
 
-if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma;
-}
+export const prisma = (() => {
+  if (isBuildPhase) {
+    // Avoid instantiating Prisma during Next build when the generated client may be unavailable.
+    return {} as PrismaClient;
+  }
+
+  const client =
+    global.prisma ||
+    new PrismaClient({
+      log: ["error"]
+    });
+
+  if (process.env.NODE_ENV !== "production") {
+    global.prisma = client;
+  }
+
+  return client;
+})();
