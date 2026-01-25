@@ -6,7 +6,7 @@ type MeetingStatus = {
 };
 
 export function generateRoomId() {
-  return crypto.randomBytes(16).toString("base64url");
+  return crypto.randomBytes(16).toString("base64url").replace(/_/g, "-");
 }
 
 export function generateTempPassword() {

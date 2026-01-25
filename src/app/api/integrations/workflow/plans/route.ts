@@ -53,7 +53,8 @@ function generateRoomId(language: string, transcriptionProvider: string) {
       : transcriptionProvider === "DEEPGRAMLIVE"
         ? "DEEPGRAMLIVE"
         : "DEEPGRAM";
-  return `${crypto.randomBytes(16).toString("base64url")}-${language}-${providerLabel}`;
+  const base = crypto.randomBytes(16).toString("base64url").replace(/_/g, "-");
+  return `${base}-${language}-${providerLabel}`;
 }
 
 type WorkflowBlockInput = {
