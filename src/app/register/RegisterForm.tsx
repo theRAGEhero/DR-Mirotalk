@@ -134,9 +134,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
       <div className="rounded-lg border border-slate-200 bg-white/80 p-4 text-xs text-slate-600">
         <p className="text-sm font-semibold text-slate-900">Privacy policy summary</p>
         <p className="mt-1 text-xs text-slate-600">
-          This platform provides meeting links, plan schedules, and transcription services. By
-          creating an account, you allow us to store your email, access preferences, and participation
-          data needed to run calls, invitations, and plan activities.
+          This platform is an MVP in beta mode. It provides meeting links, plan schedules, and
+          transcription services. By creating an account, you allow us to store your email, access
+          preferences, and participation data needed to run calls, invitations, and plan activities.
         </p>
         <p className="mt-2 text-xs text-slate-600">
           We store:

@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 type Viewer = {
   user: {
     id: string;
-    role: "ADMIN" | "USER";
+    role: string;
     email: string;
   };
 };
@@ -76,6 +77,27 @@ function extractTranscriptText(raw: string | null) {
     return "";
   }
 }
+
+type PlanRecapPlan = Prisma.PlanGetPayload<{
+  include: {
+    dataspace: {
+      include: { members: { select: { userId: true } } };
+    };
+    rounds: {
+      include: {
+        pairs: {
+          select: {
+            userAId: true;
+            userBId: true;
+            meetingId: true;
+            userA: { select: { email: true } };
+            userB: { select: { email: true } };
+          };
+        };
+      };
+    };
+  };
+}>;
 
 export async function getPlanRecapData(
   planId: string,
@@ -169,12 +191,7 @@ export async function getPlanRecapDataForWorkflow(planId: string): Promise<PlanR
   return buildRecapFromPlan(plan);
 }
 
-async function buildRecapFromPlan(
-  plan: Awaited<ReturnType<typeof prisma.plan.findUnique>>
-): Promise<PlanRecapData> {
-  if (!plan) {
-    throw new PlanRecapError("Plan not found", 404);
-  }
+async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
 
   const [textEntries, meditationSessions] = await Promise.all([
     prisma.planTextEntry.findMany({
