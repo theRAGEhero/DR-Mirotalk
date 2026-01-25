@@ -28,8 +28,11 @@ export function LiveTranscriptPanel({ roomId }: Props) {
   );
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [nextRetryIn, setNextRetryIn] = useState<number | null>(null);
+  const lineKeysRef = useRef<Set<string>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const retryDelayRef = useRef(2000);
 
   const headerLabel = useMemo(() => {
     if (status === "live") return "Live";
@@ -41,6 +44,28 @@ export function LiveTranscriptPanel({ roomId }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+
+    async function loadStoredTranscript() {
+      try {
+        const response = await fetch(
+          `/api/meetings/${encodeURIComponent(roomId)}/live-transcript`
+        );
+        if (!response.ok) return;
+        const payload = await response.json().catch(() => null);
+        const stored = Array.isArray(payload?.lines) ? payload.lines : [];
+        if (stored.length > 0) {
+          setLines(stored);
+          lineKeysRef.current = new Set(
+            stored.map(
+              (line: TranscriptLine) =>
+                `${line.speaker ?? "unknown"}::${line.time ?? "na"}::${line.text}`
+            )
+          );
+        }
+      } catch (loadError) {
+        // ignore load errors
+      }
+    }
 
     async function fetchFileName(): Promise<string | null> {
       setStatus((prev) => (prev === "idle" ? "waiting" : prev));
@@ -61,17 +86,23 @@ export function LiveTranscriptPanel({ roomId }: Props) {
         const wsUrl = await fetchFileName();
         if (!wsUrl) {
           if (!pollingRef.current) {
-            pollingRef.current = setInterval(() => {
+            const delay = retryDelayRef.current;
+            setNextRetryIn(Math.ceil(delay / 1000));
+            pollingRef.current = setTimeout(() => {
+              pollingRef.current = null;
               if (cancelled) return;
               connect().catch(() => null);
-            }, 4000);
+            }, delay);
+            retryDelayRef.current = Math.min(Math.round(delay * 1.5), 15000);
           }
           return;
         }
         if (pollingRef.current) {
-          clearInterval(pollingRef.current);
+          clearTimeout(pollingRef.current);
           pollingRef.current = null;
         }
+        retryDelayRef.current = 2000;
+        setNextRetryIn(null);
         if (cancelled) return;
         setStatus("connecting");
         const socket = new WebSocket(wsUrl);
@@ -81,6 +112,8 @@ export function LiveTranscriptPanel({ roomId }: Props) {
           if (cancelled) return;
           setStatus("live");
           setError(null);
+          setNextRetryIn(null);
+          retryDelayRef.current = 2000;
         };
         socket.onmessage = (event) => {
           try {
@@ -88,18 +121,27 @@ export function LiveTranscriptPanel({ roomId }: Props) {
             if (!payload?.transcript || !payload?.is_final) return;
             const speaker = payload?.words?.[0]?.speaker;
             const time = payload?.words?.[0]?.start;
+            const text = payload.transcript as string;
+            const key = `${speaker ?? "unknown"}::${time ?? "na"}::${text}`;
+            if (lineKeysRef.current.has(key)) return;
+            lineKeysRef.current.add(key);
             setLines((prev) => {
               const next = [
                 ...prev,
                 {
                   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                  text: payload.transcript as string,
+                  text,
                   speaker,
                   time
                 }
               ];
               return next.slice(-80);
             });
+            fetch(`/api/meetings/${encodeURIComponent(roomId)}/live-transcript`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text, speaker, time })
+            }).catch(() => null);
           } catch (parseError) {
             // ignore parse errors
           }
@@ -114,10 +156,14 @@ export function LiveTranscriptPanel({ roomId }: Props) {
           wsRef.current = null;
           setStatus("waiting");
           if (!pollingRef.current) {
-            pollingRef.current = setInterval(() => {
+            const delay = retryDelayRef.current;
+            setNextRetryIn(Math.ceil(delay / 1000));
+            pollingRef.current = setTimeout(() => {
+              pollingRef.current = null;
               if (cancelled) return;
               connect().catch(() => null);
-            }, 5000);
+            }, delay);
+            retryDelayRef.current = Math.min(Math.round(delay * 1.5), 15000);
           }
         };
       } catch (err) {
@@ -127,12 +173,13 @@ export function LiveTranscriptPanel({ roomId }: Props) {
       }
     }
 
+    loadStoredTranscript().catch(() => null);
     connect().catch(() => null);
 
     return () => {
       cancelled = true;
       if (pollingRef.current) {
-        clearInterval(pollingRef.current);
+        clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
       if (wsRef.current) {
@@ -166,6 +213,9 @@ export function LiveTranscriptPanel({ roomId }: Props) {
           <div className="space-y-3 text-sm text-slate-500">
             <p>Waiting for live transcription to start.</p>
             <p>Start recording to stream text here.</p>
+            {status === "waiting" && nextRetryIn !== null ? (
+              <p>Reconnecting in {nextRetryIn}s…</p>
+            ) : null}
             {error ? <p className="text-rose-600">{error}</p> : null}
           </div>
         ) : (
