@@ -78,7 +78,7 @@ export default async function PlansPage() {
                   <span className="col-span-2">Title</span>
                   <span>Starts</span>
                   <span>Ends</span>
-                  <span>Rounds</span>
+                  <span>Pairings</span>
                   <span>Created by</span>
                 </div>
                 <div className="divide-y divide-slate-200">

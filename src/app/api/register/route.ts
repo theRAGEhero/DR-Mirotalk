@@ -37,10 +37,6 @@ export async function POST(request: Request) {
     where: { email: parsed.data.email }
   });
 
-  if (existing) {
-    return NextResponse.json({ error: "Email already exists" }, { status: 400 });
-  }
-
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
   const requireEmailConfirmation = settings.requireEmailConfirmation;
   const verificationToken = requireEmailConfirmation
@@ -50,17 +46,39 @@ export async function POST(request: Request) {
     ? new Date(Date.now() + 1000 * 60 * 60 * 24)
     : null;
 
-  const user = await prisma.user.create({
-    data: {
-      email: parsed.data.email,
-      passwordHash,
-      role: "USER",
-      mustChangePassword: false,
-      emailVerifiedAt: requireEmailConfirmation ? null : new Date(),
-      emailVerificationToken: verificationToken,
-      emailVerificationExpiresAt: verificationExpiresAt
-    }
-  });
+  const user = existing
+    ? existing.isGuest
+      ? await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            passwordHash,
+            role: "USER",
+            isGuest: false,
+            privacyPolicyAccepted: true,
+            mustChangePassword: false,
+            emailVerifiedAt: requireEmailConfirmation ? null : new Date(),
+            emailVerificationToken: verificationToken,
+            emailVerificationExpiresAt: verificationExpiresAt
+          }
+        })
+      : null
+    : await prisma.user.create({
+        data: {
+          email: parsed.data.email,
+          passwordHash,
+          role: "USER",
+          isGuest: false,
+          privacyPolicyAccepted: true,
+          mustChangePassword: false,
+          emailVerifiedAt: requireEmailConfirmation ? null : new Date(),
+          emailVerificationToken: verificationToken,
+          emailVerificationExpiresAt: verificationExpiresAt
+        }
+      });
+
+  if (!user) {
+    return NextResponse.json({ error: "Email already exists" }, { status: 400 });
+  }
 
   if (requireEmailConfirmation && verificationToken) {
     const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3015";

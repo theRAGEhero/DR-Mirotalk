@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { getPlanViewer } from "@/lib/planGuests";
 import {
   buildLegacySegments,
   buildPlanSegmentsFromBlocks,
@@ -15,12 +15,12 @@ export async function GET(
 ) {
   const requestUrl = new URL(_request.url);
   const includeMeetings = requestUrl.searchParams.get("include_meetings") === "1";
-  const session = await getSession();
-  if (!session?.user) {
+  const viewer = await getPlanViewer(_request, params.id);
+  if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = viewer.user.role === "ADMIN";
   const plan = isAdmin
     ? await prisma.plan.findUnique({
         where: { id: params.id },
@@ -54,15 +54,27 @@ export async function GET(
     : await prisma.plan.findFirst({
         where: {
           id: params.id,
-          rounds: {
-            some: {
-              pairs: {
+          OR: [
+            {
+              rounds: {
                 some: {
-                  OR: [{ userAId: session.user.id }, { userBId: session.user.id }]
+                  pairs: {
+                    some: {
+                      OR: [{ userAId: viewer.user.id }, { userBId: viewer.user.id }]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              participants: {
+                some: {
+                  userId: viewer.user.id,
+                  status: "APPROVED"
                 }
               }
             }
-          }
+          ]
         },
         select: {
           id: true,

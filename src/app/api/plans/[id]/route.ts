@@ -11,8 +11,14 @@ import {
 } from "@/lib/planSchedule";
 import crypto from "crypto";
 
-function generateRoomId() {
-  return crypto.randomBytes(16).toString("base64url");
+function generateRoomId(language: string, transcriptionProvider: string) {
+  const providerLabel =
+    transcriptionProvider === "VOSK"
+      ? "VOSK"
+      : transcriptionProvider === "DEEPGRAMLIVE"
+        ? "DEEPGRAMLIVE"
+        : "DEEPGRAM";
+  return `${crypto.randomBytes(16).toString("base64url")}-${language}-${providerLabel}`;
 }
 
 function makeGroups(userIds: string[], maxParticipantsPerRoom: number) {
@@ -238,7 +244,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   for (let i = 0; i < roundBlocks.length; i += 1) {
     const groups = makeGroups(rotation, maxParticipantsPerRoom);
     const pairs = groups.flatMap((group) => {
-      const roomId = generateRoomId();
+      const roomId = generateRoomId(parsed.data.language, parsed.data.transcriptionProvider);
       const roomPairs: Array<{ userAId: string; userBId: string | null; roomId: string }> = [];
 
       for (let index = 0; index < group.length; index += 2) {

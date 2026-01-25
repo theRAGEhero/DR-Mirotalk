@@ -535,7 +535,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     setPosterLoading(false);
 
     if (!response.ok) {
-    setPosterError(normalizeFormError(payload, "Unable to create poster"));
+    setPosterError(normalizeFormError(payload, "Unable to create prompt"));
       return;
     }
 
@@ -829,7 +829,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     const firstMeditationBlock = meditationBlocks[0] ?? null;
     if (roundBlocks.length === 0) {
       setLoading(false);
-      setError("Add at least one round block.");
+      setError("Add at least one pairing block.");
       return;
     }
     const roundDuration = Math.max(
@@ -960,7 +960,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Minutes per round</label>
+            <label className="text-sm font-medium">Minutes per pairing</label>
             <input
               type="number"
               min={1}
@@ -971,7 +971,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Rounds</label>
+            <label className="text-sm font-medium">Pairings</label>
             <input
               type="number"
               min={1}
@@ -1040,7 +1040,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-slate-600">
-          Meditation settings are configured per block in the plan timeline. Add a Meditation block
+          Pause settings are configured per block in the plan timeline. Add a Pause block
           to choose its own audio and visual effect.
         </div>
 
@@ -1049,7 +1049,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
             <div>
               <p className="text-sm font-medium text-slate-900">Plan timeline</p>
               <p className="text-xs text-slate-500">
-                Arrange the sequence of rounds, meditation, posters, and text blocks.
+                Arrange the sequence of pairings, pauses, prompts, and notes blocks.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1120,12 +1120,12 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                         </span>
                         <span className="text-xs font-semibold uppercase text-slate-500">
                           {block.type === "ROUND"
-                            ? `Round ${planBlocks.slice(0, index + 1).filter((item) => item.type === "ROUND").length}`
+                            ? `Pairing ${planBlocks.slice(0, index + 1).filter((item) => item.type === "ROUND").length}`
                             : block.type === "MEDITATION"
-                              ? "Meditation"
+                              ? "Pause"
                               : block.type === "POSTER"
-                                ? "Poster"
-                                : "Text"}
+                                ? "Prompt"
+                                : "Notes"}
                         </span>
                         <select
                           value={block.type}
@@ -1146,10 +1146,10 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                           }
                           className="dr-input h-8 rounded px-2 text-xs"
                         >
-                          <option value="ROUND">Round</option>
-                          <option value="MEDITATION">Meditation</option>
-                          <option value="POSTER">Poster</option>
-                          <option value="TEXT">Text</option>
+                          <option value="ROUND">Pairing</option>
+                          <option value="MEDITATION">Pause</option>
+                          <option value="POSTER">Prompt</option>
+                          <option value="TEXT">Notes</option>
                         </select>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
@@ -1211,7 +1211,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                           }
                           className="dr-input rounded px-2 py-2 text-xs"
                         >
-                          <option value="">Select a poster</option>
+                          <option value="">Select a prompt</option>
                           {posters.map((poster) => (
                             <option key={poster.id} value={poster.id}>
                               {poster.title}
@@ -1300,16 +1300,16 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
 
           <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
             <button type="button" onClick={() => addBlock("ROUND")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
-              + Round
+              + Pairing
             </button>
             <button type="button" onClick={() => addBlock("MEDITATION")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
-              + Meditation
+              + Pause
             </button>
             <button type="button" onClick={() => addBlock("POSTER")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
-              + Poster
+              + Prompt
             </button>
             <button type="button" onClick={() => addBlock("TEXT")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
-              + Text
+              + Notes
             </button>
           </div>
         </div>
@@ -1462,7 +1462,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
             <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70">
               <div className="relative h-full w-full overflow-hidden bg-black/90">
                   <iframe
-                    title="Meditation preview"
+                    title="Pause preview"
                     src={
                     MEDITATION_ANIMATIONS.find((item) => item.id === previewAnimationId)
                       ?.file
@@ -1479,7 +1479,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                   />
                 </div>
                 <div className="absolute left-6 top-6 rounded-full bg-black/60 px-4 py-2 text-xs font-semibold uppercase text-white/80">
-                  Meditation Preview
+                  Pause Preview
                 </div>
                 <button
                   type="button"
@@ -1504,7 +1504,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                   <div>
                     <p className="text-sm font-semibold uppercase text-slate-500">Plan library</p>
                     <p className="text-lg font-semibold text-slate-900">
-                      Audio, effects, and posters
+                      Audio, effects, and prompts
                     </p>
                   </div>
                   <button
@@ -1607,26 +1607,26 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                     </button>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase text-slate-500">Posters</p>
+                    <p className="text-xs font-semibold uppercase text-slate-500">Prompts</p>
                     <form onSubmit={handleCreatePoster} className="mt-3 space-y-2 rounded border border-slate-200 bg-white/80 p-3">
                       <input
                         value={posterTitle}
                         onChange={(event) => setPosterTitle(event.target.value)}
-                        placeholder="Poster title"
+                        placeholder="Prompt title"
                         className="dr-input w-full rounded px-2 py-2 text-xs"
                         required
                       />
                       <textarea
                         value={posterContent}
                         onChange={(event) => setPosterContent(event.target.value)}
-                        placeholder="Poster content. Use **bold** for emphasis."
+                        placeholder="Prompt content. Use **bold** for emphasis."
                         className="dr-input w-full rounded px-2 py-2 text-xs"
                         rows={4}
                         required
                       />
                       {posterError ? (
                         <p className="text-xs text-red-600">
-                          {typeof posterError === "string" ? posterError : "Unable to create poster"}
+                          {typeof posterError === "string" ? posterError : "Unable to create prompt"}
                         </p>
                       ) : null}
                       <button
@@ -1634,12 +1634,12 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                         className="dr-button-outline px-3 py-1 text-xs"
                         disabled={posterLoading}
                       >
-                        {posterLoading ? "Creating..." : "Create poster"}
+                        {posterLoading ? "Creating..." : "Create prompt"}
                       </button>
                     </form>
                     <div className="mt-3 space-y-3">
                       {posters.length === 0 ? (
-                        <p className="text-xs text-slate-500">No posters yet.</p>
+                        <p className="text-xs text-slate-500">No prompts yet.</p>
                       ) : (
                         posters.map((poster) => (
                           <div key={poster.id} className="rounded border border-slate-200 bg-white px-3 py-2">

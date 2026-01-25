@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { sendMail } from "@/lib/mailer";
 import { inviteMemberSchema } from "@/lib/validators";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
+
+function generateToken() {
+  return crypto.randomBytes(24).toString("base64url");
+}
 
 export async function POST(
   request: Request,
@@ -51,15 +57,33 @@ export async function POST(
   }
 
   const targetEmail = parsed.data.email.toLowerCase();
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { email: targetEmail }
   });
 
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const needsGuestInvite = !user || user.isGuest;
+  if (needsGuestInvite) {
+    if (!user) {
+      const tempPassword = crypto.randomBytes(32).toString("base64url");
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      user = await prisma.user.create({
+        data: {
+          email: targetEmail,
+          passwordHash,
+          role: "USER",
+          isGuest: true,
+          mustChangePassword: false,
+          emailVerifiedAt: null
+        }
+      });
+    }
   }
 
-  if (plan.dataspaceId) {
+  if (!user) {
+    return NextResponse.json({ error: "Unable to prepare invite" }, { status: 500 });
+  }
+
+  if (plan.dataspaceId && user && !user.isGuest) {
     const member = await prisma.dataspaceMember.findUnique({
       where: {
         dataspaceId_userId: {
@@ -125,6 +149,44 @@ export async function POST(
   }
 
   const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3015";
+  if (needsGuestInvite) {
+    const token = generateToken();
+    const invite = await prisma.planGuestInvite.upsert({
+      where: {
+        planId_email: {
+          planId: plan.id,
+          email: targetEmail
+        }
+      },
+      update: {
+        token,
+        userId: user.id
+      },
+      create: {
+        planId: plan.id,
+        createdById: session.user.id,
+        userId: user.id,
+        email: targetEmail,
+        token
+      }
+    });
+    const guestLink = `${appBaseUrl}/guest/plans/${invite.token}`;
+    const registerLink = `${appBaseUrl}/register`;
+    const emailResult = await sendMail({
+      to: user.email,
+      subject: "You are invited to a plan",
+      html: `<p>You have been invited to the plan <strong>${plan.title}</strong>.</p>
+        <p>Join without registration: <a href="${guestLink}">${guestLink}</a></p>
+        <p>Prefer to register? Create an account: <a href="${registerLink}">${registerLink}</a></p>`,
+      text: `You have been invited to the plan ${plan.title}. Join without registration: ${guestLink}. Register: ${registerLink}`
+    });
+
+    return NextResponse.json({
+      message: "Guest invite sent",
+      emailSent: emailResult.ok
+    });
+  }
+
   const emailResult = await sendMail({
     to: user.email,
     subject: "You are invited to a plan",

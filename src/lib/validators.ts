@@ -93,7 +93,10 @@ export const registerSchema = z
     email: z.string().email("Invalid email"),
     password: z.string().min(12, "Minimum 12 characters"),
     confirmPassword: z.string().min(12),
-    code: z.string().optional().or(z.literal(""))
+    code: z.string().optional().or(z.literal("")),
+    acceptPolicy: z.literal(true, {
+      errorMap: () => ({ message: "Please accept the privacy policy" })
+    })
   })
   .refine((data) => /[a-zA-Z]/.test(data.password), {
     message: "Password must include at least one letter",

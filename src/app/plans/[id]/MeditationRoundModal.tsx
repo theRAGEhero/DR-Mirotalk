@@ -131,13 +131,13 @@ export function MeditationRoundModal({
       <div className="relative h-[calc(100vh-2rem)] w-[min(100%,1100px)] overflow-hidden rounded-3xl border border-slate-200 bg-black/80 shadow-[0_24px_60px_rgba(15,23,42,0.3)]">
         {animationFile ? (
           <iframe
-            title="Meditation animation"
+            title="Pause animation"
             src={animationFile}
             className="h-full w-full"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-slate-200">
-            Meditation
+            Pause
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -150,7 +150,7 @@ export function MeditationRoundModal({
           />
         </div>
         <div className="absolute left-6 top-6 rounded-full bg-black/60 px-4 py-2 text-xs font-semibold uppercase text-white/80">
-          Meditation Round {meditationIndex}
+          Pause {meditationIndex}
         </div>
       </div>
     </div>

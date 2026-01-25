@@ -208,7 +208,7 @@ export function TranscriptionJobsTable({ initialJobs }: Props) {
                       )}
                       <div className="text-[10px] text-slate-500">
                         {job.kind}
-                        {job.meditationIndex !== null ? ` · Meditation ${job.meditationIndex}` : ""}
+                        {job.meditationIndex !== null ? ` · Pause ${job.meditationIndex}` : ""}
                         {job.roundId ? ` · ${job.roundId}` : ""}
                       </div>
                     </div>

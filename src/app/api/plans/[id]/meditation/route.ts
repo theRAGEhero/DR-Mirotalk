@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { getPlanViewer } from "@/lib/planGuests";
 
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getSession();
-  if (!session?.user) {
+  const viewer = await getPlanViewer(_request, params.id);
+  if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = viewer.user.role === "ADMIN";
   const plan = isAdmin
     ? await prisma.plan.findUnique({
         where: { id: params.id },
@@ -26,14 +26,14 @@ export async function GET(
                 some: {
                   pairs: {
                     some: {
-                      OR: [{ userAId: session.user.id }, { userBId: session.user.id }]
+                      OR: [{ userAId: viewer.user.id }, { userBId: viewer.user.id }]
                     }
                   }
                 }
               }
             },
             {
-              participants: { some: { userId: session.user.id } }
+              participants: { some: { userId: viewer.user.id, status: "APPROVED" } }
             }
           ]
         },
@@ -47,7 +47,7 @@ export async function GET(
   const sessions = await prisma.planMeditationSession.findMany({
     where: {
       planId: plan.id,
-      userId: session.user.id
+      userId: viewer.user.id
     },
     orderBy: { meditationIndex: "asc" },
     select: {

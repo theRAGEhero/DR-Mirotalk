@@ -46,6 +46,7 @@ type Props = {
   assignments: RoundAssignment[];
   baseUrl: string;
   userEmail: string;
+  guestToken?: string | null;
 };
 
 function formatDuration(totalSeconds: number) {
@@ -88,7 +89,8 @@ export function ParticipantViewClient({
   roundGroups,
   assignments,
   baseUrl,
-  userEmail
+  userEmail,
+  guestToken
 }: Props) {
   const startTime = useMemo(() => new Date(startAt).getTime(), [startAt]);
   const [now, setNow] = useState<number | null>(null);
@@ -127,6 +129,12 @@ export function ParticipantViewClient({
   const [showModal, setShowModal] = useState(false);
   const [autoOpenedModal, setAutoOpenedModal] = useState(false);
   const [meditationMuted, setMeditationMuted] = useState(false);
+  const withGuestToken = (url: string) => {
+    if (!guestToken) return url;
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}guest_token=${encodeURIComponent(guestToken)}`;
+  };
+  const guestHeaders = guestToken ? { "x-guest-token": guestToken } : {};
 
   const blockById = useMemo(
     () => new Map(blocks.map((block) => [block.id, block])),
@@ -171,7 +179,7 @@ export function ParticipantViewClient({
   useEffect(() => {
     let active = true;
     async function loadSessions() {
-      const response = await fetch(`/api/plans/${planId}/meditation`);
+      const response = await fetch(withGuestToken(`/api/plans/${planId}/meditation`));
       if (!response.ok) return;
       const payload = await response.json().catch(() => null);
       if (!active) return;
@@ -196,7 +204,9 @@ export function ParticipantViewClient({
 
     async function syncServerTime() {
       try {
-        const response = await fetch(`/api/plans/${planId}/current?include_meetings=1`);
+        const response = await fetch(
+          withGuestToken(`/api/plans/${planId}/current?include_meetings=1`)
+        );
         if (!response.ok) return;
         const payload = await response.json().catch(() => null);
         const serverNow = Date.parse(payload?.serverNow);
@@ -299,7 +309,9 @@ export function ParticipantViewClient({
 
     async function ensureMeetings() {
       try {
-        const response = await fetch(`/api/plans/${planId}/current?include_meetings=1`);
+        const response = await fetch(
+          withGuestToken(`/api/plans/${planId}/current?include_meetings=1`)
+        );
         if (!response.ok) return;
         const payload = await response.json().catch(() => null);
         if (mounted && Array.isArray(payload?.currentRoundMeetings)) {
@@ -368,7 +380,7 @@ export function ParticipantViewClient({
         data-poster
         dangerouslySetInnerHTML={{
           __html: renderPosterHtml(
-            currentBlock?.poster?.content ?? "Poster content missing."
+            currentBlock?.poster?.content ?? "Prompt content missing."
           )
         }}
       />
@@ -380,7 +392,7 @@ export function ParticipantViewClient({
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-200/70">
-            Text mode
+            Notes
           </p>
           <p className="mt-1 text-xs text-amber-100/60">
             Write freely. Autosave keeps your draft safe while the block is active.
@@ -431,7 +443,7 @@ export function ParticipantViewClient({
     <div
       className={`flex items-center justify-center rounded-3xl border border-white/10 bg-slate-950/70 px-6 py-10 text-center text-slate-200 ${experienceContainerClass}`}
     >
-      <p className="text-lg">This round is a break for you.</p>
+      <p className="text-lg">This pairing is a break for you.</p>
     </div>
   ) : status === "done" ? (
     <div
@@ -461,7 +473,9 @@ export function ParticipantViewClient({
     setTextEntryStatus("loading");
     setTextBlockId(currentSegment.blockId);
     async function loadEntry() {
-      const response = await fetch(`/api/plans/${planId}/blocks/${currentSegment.blockId}/text`);
+      const response = await fetch(
+        withGuestToken(`/api/plans/${planId}/blocks/${currentSegment.blockId}/text`)
+      );
       const payload = await response.json().catch(() => null);
       if (!active) return;
       if (response.ok) {
@@ -485,9 +499,9 @@ export function ParticipantViewClient({
     if (textEntry === lastSavedTextRef.current) return;
     const timer = setTimeout(async () => {
       setTextEntryStatus("saving");
-      const response = await fetch(`/api/plans/${planId}/blocks/${textBlockId}/text`, {
+      const response = await fetch(withGuestToken(`/api/plans/${planId}/blocks/${textBlockId}/text`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...guestHeaders },
         body: JSON.stringify({ content: textEntry })
       });
       if (response.ok) {
@@ -511,7 +525,9 @@ export function ParticipantViewClient({
     async function loadCompletedTextEntries() {
       const entries = await Promise.all(
         textBlockIds.map(async (blockId) => {
-          const response = await fetch(`/api/plans/${planId}/blocks/${blockId}/text`);
+          const response = await fetch(
+            withGuestToken(`/api/plans/${planId}/blocks/${blockId}/text`)
+          );
           const payload = await response.json().catch(() => null);
           if (!response.ok) return [blockId, ""] as const;
           return [blockId, payload?.entry?.content ?? ""] as const;
@@ -533,7 +549,7 @@ export function ParticipantViewClient({
   async function refreshPlanRecap() {
     setRecapLoading(true);
     setRecapError(null);
-    const response = await fetch(`/api/plans/${planId}/recap`);
+    const response = await fetch(withGuestToken(`/api/plans/${planId}/recap`));
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       setRecapError("Unable to load plan recap.");
@@ -579,8 +595,9 @@ export function ParticipantViewClient({
     if (roundAfterValue) {
       formData.append("roundAfter", String(roundAfterValue));
     }
-    const response = await fetch(`/api/plans/${planId}/meditation/transcribe`, {
+    const response = await fetch(withGuestToken(`/api/plans/${planId}/meditation/transcribe`), {
       method: "POST",
+      headers: guestHeaders,
       body: formData
     });
     const payload = await response.json().catch(() => null);
@@ -617,16 +634,16 @@ export function ParticipantViewClient({
             <span className="font-semibold text-slate-900">
               {status === "pending" && "Not started"}
               {status === "active" && currentSegment?.type === "MEDITATION"
-                ? `Meditation ${meditationIndex}`
+                ? `Pause ${meditationIndex}`
                 : null}
               {status === "active" && currentSegment?.type === "POSTER"
                 ? currentBlock?.poster?.title
-                  ? `Poster · ${currentBlock.poster.title}`
-                  : "Poster"
+                  ? `Prompt · ${currentBlock.poster.title}`
+                  : "Prompt"
                 : null}
-              {status === "active" && currentSegment?.type === "TEXT" ? "Text mode" : null}
+              {status === "active" && currentSegment?.type === "TEXT" ? "Notes" : null}
               {status === "active" && currentSegment?.type === "ROUND"
-                ? `Round ${currentRound} of ${roundsCount}`
+                ? `Pairing ${currentRound} of ${roundsCount}`
                 : null}
               {status === "done" && "Finished"}
             </span>
@@ -722,32 +739,6 @@ export function ParticipantViewClient({
           <TranscriptionPanel meetingId={currentMeetingId} canManage={false} />
         ) : null}
 
-        {meditationEnabled ? (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold uppercase text-slate-500">Meditation notes</h3>
-            <div className="mt-2 space-y-2 text-sm text-slate-700">
-              {meditationSessions.length === 0 ? (
-                <p className="text-slate-500">No meditation transcripts yet.</p>
-              ) : (
-                meditationSessions.map((session) => (
-                  <div key={session.id} className="rounded border border-slate-200 bg-white/70 px-3 py-2">
-                    <p className="text-xs font-semibold uppercase text-slate-500">
-                      Meditation {session.meditationIndex}
-                      {session.roundAfter ? ` · before round ${session.roundAfter}` : ""}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">
-                      {session.transcriptText || "Transcription saved."}
-                    </p>
-                  </div>
-                ))
-              )}
-              {sendingMeditation ? (
-                <p className="text-xs text-slate-500">Saving meditation transcription...</p>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
         <div className="mt-6">
           <h3 className="text-sm font-semibold uppercase text-slate-500">Your schedule</h3>
           <div className="mt-2 space-y-2 text-sm text-slate-700">
@@ -756,7 +747,7 @@ export function ParticipantViewClient({
               return (
                 <div key={item.roundNumber} className="rounded border border-slate-200 bg-white/70 px-3 py-2">
                   <div className="break-all">
-                    Round {item.roundNumber}: {item.partnerLabel}{" "}
+                    Pairing {item.roundNumber}: {item.partnerLabel}{" "}
                     {item.isBreak ? "(break)" : `— ${item.roomId}`}
                   </div>
                   {meetingId ? (
@@ -782,7 +773,7 @@ export function ParticipantViewClient({
                 Your journey, captured
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                Notes, posters, and round highlights from this plan.
+                Notes, prompts, and pairing highlights from this plan.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -841,7 +832,7 @@ export function ParticipantViewClient({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold uppercase text-slate-500">Round {roundNumber}</p>
+                        <p className="text-xs font-semibold uppercase text-slate-500">Pairing {roundNumber}</p>
                         <p className="mt-1 text-lg font-semibold text-slate-900">
                           {recapView === "plan" ? "Multiple pairs" : roundAssignment?.partnerLabel || "Partner"}
                         </p>
@@ -912,7 +903,7 @@ export function ParticipantViewClient({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="text-xs font-semibold uppercase text-emerald-700">
-                        Meditation {segment.meditationIndex}
+                        Pause {segment.meditationIndex}
                       </p>
                       <p className="text-xs text-emerald-700/70">
                         Duration {formatDuration(durationSeconds)}
@@ -936,7 +927,7 @@ export function ParticipantViewClient({
                                 <p className="mt-1 text-sm text-emerald-900">
                                   {entry?.transcriptText
                                     ? entry.transcriptText
-                                    : "No meditation transcript."}
+                                    : "No pause transcript."}
                                 </p>
                               </div>
                             );
@@ -969,7 +960,7 @@ export function ParticipantViewClient({
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <p className="text-xs font-semibold uppercase text-slate-500">
-                          Poster{poster?.title ? ` · ${poster.title}` : ""}
+                          Prompt{poster?.title ? ` · ${poster.title}` : ""}
                         </p>
                         <p className="text-xs text-slate-500">
                           Duration {formatDuration(durationSeconds)}
@@ -978,7 +969,7 @@ export function ParticipantViewClient({
                       <div
                         className="prose prose-sm mt-3 max-w-none text-slate-800"
                         dangerouslySetInnerHTML={{
-                          __html: renderPosterHtml(poster?.content ?? "Poster content missing.")
+                          __html: renderPosterHtml(poster?.content ?? "Prompt content missing.")
                         }}
                       />
                     </div>
@@ -997,7 +988,7 @@ export function ParticipantViewClient({
                     className="rounded-2xl border border-amber-200/60 bg-amber-50/70 px-4 py-4"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase text-amber-700">Text mode</p>
+                      <p className="text-xs font-semibold uppercase text-amber-700">Notes</p>
                       <p className="text-xs text-amber-700/70">
                         Duration {formatDuration(durationSeconds)}
                       </p>

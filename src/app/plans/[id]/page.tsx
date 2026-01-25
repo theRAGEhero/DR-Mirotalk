@@ -56,12 +56,16 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
   }
 
   const isAdmin = session.user.role === "ADMIN";
-  const isParticipant = plan.rounds.some(
+  const isPairParticipant = plan.rounds.some(
     (round: (typeof plan.rounds)[number]) =>
       round.pairs.some(
         (pair: (typeof round.pairs)[number]) =>
           pair.userAId === session.user.id || pair.userBId === session.user.id
       )
+  );
+  const participantApproved = plan.participants.some(
+    (participant: (typeof plan.participants)[number]) =>
+      participant.userId === session.user.id && participant.status === "APPROVED"
   );
   const isDataspaceMember = plan.dataspace
     ? plan.dataspace.members.some(
@@ -70,7 +74,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
       )
     : false;
 
-  if (!isAdmin && !isParticipant && !(plan.isPublic && isDataspaceMember)) {
+  if (!isAdmin && !isPairParticipant && !participantApproved && !(plan.isPublic && isDataspaceMember)) {
     return <p className="text-sm text-slate-600">Access denied.</p>;
   }
 
@@ -211,7 +215,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
           <h1 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
             Plan Participant View
           </h1>
-          <p className="text-sm text-slate-600">Personalized call link and round status.</p>
+          <p className="text-sm text-slate-600">Personalized call link and pairing status.</p>
         </div>
         {canEdit ? (
           <Link href={`/plans/${plan.id}/edit`} className="dr-button-outline px-3 py-1 text-xs">
@@ -259,11 +263,11 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
           ) : null}
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm text-slate-700">
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-500">Rounds</p>
+              <p className="text-xs font-semibold uppercase text-slate-500">Pairings</p>
               <p>{plan.roundsCount}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-500">Minutes per round</p>
+              <p className="text-xs font-semibold uppercase text-slate-500">Minutes per pairing</p>
               <p>{plan.roundDurationMinutes}</p>
             </div>
             <div>
@@ -282,7 +286,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
             ) : null}
             {meditationBlocks.length > 0 ? (
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Meditation blocks</p>
+                <p className="text-xs font-semibold uppercase text-slate-500">Pause blocks</p>
                 <p>
                   {meditationBlocks.length} · {meditationTotalMinutes} min total
                 </p>

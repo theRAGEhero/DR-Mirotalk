@@ -20,6 +20,8 @@ model User {
   telegramVerificationExpiresAt DateTime?
   calComLink         String?
   role               String           @default("USER")
+  isGuest            Boolean          @default(false)
+  privacyPolicyAccepted Boolean       @default(false)
   mustChangePassword Boolean          @default(false)
   createdAt          DateTime         @default(now())
   meetingsCreated    Meeting[]        @relation("MeetingCreator")
@@ -43,6 +45,7 @@ model User {
   planTemplates      PlanTemplate[]   @relation("PlanTemplateCreator")
   transcriptionJobs  TranscriptionJob[]
   feedbacks          Feedback[]
+  planGuestInvites   PlanGuestInvite[]
 
   @@index([role])
   @@index([emailVerificationToken])
@@ -373,6 +376,26 @@ model PlanParticipant {
   @@index([planId])
   @@index([userId])
   @@index([status])
+}
+
+model PlanGuestInvite {
+  id          String   @id @default(cuid())
+  planId      String
+  createdById String
+  userId      String
+  email       String
+  token       String   @unique
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, email])
+  @@index([planId])
+  @@index([createdById])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Dataspace {

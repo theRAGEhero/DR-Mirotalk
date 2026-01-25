@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { getPlanViewer } from "@/lib/planGuests";
 
 function extractTranscriptText(raw: string | null) {
   if (!raw) return "";
@@ -26,8 +26,8 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getSession();
-  if (!session?.user) {
+  const viewer = await getPlanViewer(_request, params.id);
+  if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -57,22 +57,32 @@ export async function GET(
     return NextResponse.json({ error: "Plan not found" }, { status: 404 });
   }
 
-  const isAdmin = session.user.role === "ADMIN";
-  const isParticipant = plan.rounds.some(
+  const isAdmin = viewer.user.role === "ADMIN";
+  const isPairParticipant = plan.rounds.some(
     (round: (typeof plan.rounds)[number]) =>
       round.pairs.some(
         (pair: (typeof round.pairs)[number]) =>
-          pair.userAId === session.user.id || pair.userBId === session.user.id
+          pair.userAId === viewer.user.id || pair.userBId === viewer.user.id
       )
   );
+  const participantRecord = await prisma.planParticipant.findUnique({
+    where: {
+      planId_userId: {
+        planId: plan.id,
+        userId: viewer.user.id
+      }
+    },
+    select: { status: true }
+  });
+  const participantApproved = participantRecord?.status === "APPROVED";
   const isDataspaceMember = plan.dataspace
     ? plan.dataspace.members.some(
         (member: (typeof plan.dataspace.members)[number]) =>
-          member.userId === session.user.id
+          member.userId === viewer.user.id
       )
     : false;
 
-  if (!isAdmin && !isParticipant && !(plan.isPublic && isDataspaceMember)) {
+  if (!isAdmin && !isPairParticipant && !participantApproved && !(plan.isPublic && isDataspaceMember)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

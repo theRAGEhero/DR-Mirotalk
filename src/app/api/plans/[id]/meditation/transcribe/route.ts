@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { getPlanViewer } from "@/lib/planGuests";
 import { getBaseUrlCandidates } from "@/lib/transcription";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -22,12 +22,12 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getSession();
-  if (!session?.user) {
+  const viewer = await getPlanViewer(request, params.id);
+  if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = viewer.user.role === "ADMIN";
   const plan = isAdmin
     ? await prisma.plan.findUnique({
         where: { id: params.id },
@@ -48,14 +48,14 @@ export async function POST(
                 some: {
                   pairs: {
                     some: {
-                      OR: [{ userAId: session.user.id }, { userBId: session.user.id }]
+                      OR: [{ userAId: viewer.user.id }, { userBId: viewer.user.id }]
                     }
                   }
                 }
               }
             },
             {
-              participants: { some: { userId: session.user.id } }
+              participants: { some: { userId: viewer.user.id, status: "APPROVED" } }
             }
           ]
         },
@@ -94,7 +94,7 @@ export async function POST(
   const audioBuffer = Buffer.from(await audio.arrayBuffer());
   const uploadsDir = path.join(process.cwd(), "data", "meditation-audio", "uploads");
   await fs.mkdir(uploadsDir, { recursive: true });
-  const safeName = `${plan.id}-${session.user.id}-${Date.now()}-${audio.name || `meditation-${meditationIndex}.webm`}`;
+  const safeName = `${plan.id}-${viewer.user.id}-${Date.now()}-${audio.name || `meditation-${meditationIndex}.webm`}`;
   const audioPath = path.join(uploadsDir, safeName);
   await fs.writeFile(audioPath, audioBuffer);
 
@@ -104,7 +104,7 @@ export async function POST(
       status: "RUNNING",
       provider: plan.transcriptionProvider,
       planId: plan.id,
-      userId: session.user.id,
+      userId: viewer.user.id,
       meditationIndex,
       attempts: 1,
       lastAttemptAt: new Date(),
@@ -229,7 +229,7 @@ export async function POST(
   const sessionRecord = await prisma.planMeditationSession.create({
     data: {
       planId: plan.id,
-      userId: session.user.id,
+      userId: viewer.user.id,
       meditationIndex,
       roundAfter: Number.isFinite(roundAfter) ? roundAfter : null,
       provider: plan.transcriptionProvider,

@@ -153,13 +153,13 @@ export function MeditationRoundEmbed({
       {animationFile ? (
         <iframe
           ref={iframeRef}
-          title="Meditation animation"
+          title="Pause animation"
           src={animationFile}
           className="h-full w-full"
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-slate-200">
-          Meditation
+          Pause
         </div>
       )}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -172,13 +172,13 @@ export function MeditationRoundEmbed({
         />
       </div>
       <div className="absolute left-6 top-6 rounded-full bg-black/60 px-4 py-2 text-xs font-semibold uppercase text-white/80">
-        Meditation Round {meditationIndex}
+        Pause {meditationIndex}
       </div>
       {!started ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
           <div className="rounded-2xl border border-white/10 bg-black/70 px-6 py-5 text-center text-slate-100">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-200/80">
-              Meditation
+              Pause
             </p>
             <p className="mt-2 text-sm text-slate-200">
               Tap to start audio and microphone.

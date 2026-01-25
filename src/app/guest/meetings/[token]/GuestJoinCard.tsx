@@ -12,10 +12,7 @@ type Props = {
 };
 
 export function GuestJoinCard({ active, baseUrl, roomId, language, provider, inviteEmail }: Props) {
-  const defaultName = useMemo(() => {
-    const local = inviteEmail.split("@")[0];
-    return local || inviteEmail;
-  }, [inviteEmail]);
+  const defaultName = useMemo(() => inviteEmail, [inviteEmail]);
   const [name, setName] = useState(defaultName);
 
   const joinUrl = `${baseUrl}/join/${roomId}?name=${encodeURIComponent(

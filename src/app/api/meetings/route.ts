@@ -5,6 +5,11 @@ import { getSession } from "@/lib/session";
 import { generateRoomId } from "@/lib/utils";
 import { sendMail } from "@/lib/mailer";
 import { notifyDataspaceSubscribers } from "@/lib/dataspaceNotifications";
+import crypto from "crypto";
+
+function generateToken() {
+  return crypto.randomBytes(24).toString("base64url");
+}
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -94,13 +99,13 @@ export async function POST(request: Request) {
     (email) => email !== session.user.email.toLowerCase()
   );
 
-  let invitedUsers: Array<{ id: string; email: string }> = [];
+  let invitedUsers: Array<{ id: string; email: string; isGuest: boolean }> = [];
   let missingUsers: string[] = [];
 
   if (uniqueEmails.length > 0) {
     invitedUsers = await prisma.user.findMany({
       where: { email: { in: uniqueEmails } },
-      select: { id: true, email: true }
+      select: { id: true, email: true, isGuest: true }
     });
 
     if (invitedUsers.length !== uniqueEmails.length) {
@@ -133,8 +138,16 @@ export async function POST(request: Request) {
     }
   });
 
-  if (invitedUsers.length > 0) {
-    for (const user of invitedUsers) {
+  const registeredInvites = invitedUsers.filter((user) => !user.isGuest);
+  const guestEmails = Array.from(
+    new Set([
+      ...missingUsers,
+      ...invitedUsers.filter((user) => user.isGuest).map((user) => user.email)
+    ])
+  );
+
+  if (registeredInvites.length > 0) {
+    for (const user of registeredInvites) {
       await prisma.meetingInvite.upsert({
         where: {
           meetingId_userId: {
@@ -153,7 +166,7 @@ export async function POST(request: Request) {
 
     const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
     await Promise.all(
-      invitedUsers.map((user) =>
+      registeredInvites.map((user) =>
         sendMail({
           to: user.email,
           subject: "You are invited to a meeting",
@@ -163,6 +176,55 @@ export async function POST(request: Request) {
         })
       )
     );
+  }
+
+  if (guestEmails.length > 0) {
+    const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+    const registerLink = `${appBaseUrl}/register`;
+    const guestFailures: string[] = [];
+
+    await Promise.all(
+      guestEmails.map(async (email) => {
+        const token = generateToken();
+        const invite = await prisma.meetingGuestInvite.upsert({
+          where: {
+            meetingId_email: {
+              meetingId: meeting.id,
+              email
+            }
+          },
+          update: {
+            token,
+            expiresAt
+          },
+          create: {
+            meetingId: meeting.id,
+            createdById: session.user.id,
+            email,
+            token,
+            expiresAt
+          }
+        });
+
+        const guestLink = `${appBaseUrl}/guest/meetings/${invite.token}`;
+        const emailResult = await sendMail({
+          to: email,
+          subject: "You are invited to a meeting",
+          html: `<p>You have been invited to the meeting <strong>${meeting.title}</strong>.</p>
+            <p>Join without registration: <a href="${guestLink}">${guestLink}</a></p>
+            <p>Prefer to register? Create an account: <a href="${registerLink}">${registerLink}</a></p>`,
+          text: `You have been invited to the meeting ${meeting.title}. Join without registration: ${guestLink}. Register: ${registerLink}`
+        });
+
+        if (!emailResult.ok) {
+          guestFailures.push(email);
+        }
+      })
+    );
+
+    missingUsers = guestFailures;
+  } else {
+    missingUsers = [];
   }
 
   if (meeting.dataspaceId) {
