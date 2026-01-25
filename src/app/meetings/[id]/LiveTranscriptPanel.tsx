@@ -85,7 +85,7 @@ export function LiveTranscriptPanel({ roomId }: Props) {
         socket.onmessage = (event) => {
           try {
             const payload = JSON.parse(event.data);
-            if (!payload?.transcript) return;
+            if (!payload?.transcript || !payload?.is_final) return;
             const speaker = payload?.words?.[0]?.speaker;
             const time = payload?.words?.[0]?.start;
             setLines((prev) => {
