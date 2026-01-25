@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { MEDITATION_ANIMATIONS } from "@/lib/meditation";
@@ -118,6 +118,14 @@ function makeId() {
     return crypto.randomUUID();
   }
   return `block-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeEmailList(raw: string) {
+  if (!raw) return [];
+  return raw
+    .split(/[\n,]/)
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
 }
 
 function defaultRoundBlocks(config: {
@@ -245,6 +253,11 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [capacity, setCapacity] = useState<number | "">("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [inviteEmails, setInviteEmails] = useState("");
+  const [inviteSuggestions, setInviteSuggestions] = useState<UserOption[]>([]);
+  const [showInviteSuggestions, setShowInviteSuggestions] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logId, setLogId] = useState<string | null>(null);
@@ -257,6 +270,45 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     setOrigin(window.location.origin);
     setPortalReady(true);
   }, []);
+
+  const inviteQuery = useMemo(() => {
+    const tokens = inviteEmails.split(/[\n,]/);
+    return tokens[tokens.length - 1]?.trim() ?? "";
+  }, [inviteEmails]);
+
+  const inviteExclude = useMemo(() => {
+    return normalizeEmailList(inviteEmails).join(",");
+  }, [inviteEmails]);
+
+  useEffect(() => {
+    if (!inviteQuery) {
+      setInviteSuggestions([]);
+      return;
+    }
+
+    let active = true;
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/users?query=${encodeURIComponent(inviteQuery)}&exclude=${encodeURIComponent(inviteExclude)}`
+        );
+        if (!response.ok) return;
+        const payload = await response.json().catch(() => null);
+        if (active) {
+          setInviteSuggestions(payload?.users ?? []);
+        }
+      } catch (fetchError) {
+        if (active) {
+          setInviteSuggestions([]);
+        }
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [inviteQuery, inviteExclude]);
 
   useEffect(() => {
     if (!portalReady) return;
@@ -798,10 +850,16 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     });
   }
 
+  function handleInviteSelect(email: string) {
+    setInviteEmails((prev) => prev.replace(/[^,\n]*$/, `${email}, `));
+    setInviteSuggestions([]);
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     setLogId(null);
+    setInviteStatus(null);
     setLoading(true);
 
     if (isPublic && !dataspaceId) {
@@ -888,6 +946,41 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       });
       if (loggedId) setLogId(loggedId);
       return;
+    }
+
+    const targetPlanId = isEdit ? initialPlan?.id : payload.id;
+    if (targetPlanId) {
+      const inviteList = normalizeEmailList(inviteEmails);
+      if (inviteList.length > 0) {
+        setInviteLoading(true);
+        const results = await Promise.all(
+          inviteList.map(async (email) => {
+            try {
+              const inviteResponse = await fetch(`/api/plans/${targetPlanId}/invite`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email })
+              });
+              if (!inviteResponse.ok) {
+                const invitePayload = await inviteResponse.json().catch(() => null);
+                return { email, error: invitePayload?.error ?? "Invite failed" };
+              }
+              return null;
+            } catch (inviteError) {
+              return { email, error: "Invite failed" };
+            }
+          })
+        );
+        setInviteLoading(false);
+        const failures = results.filter(Boolean) as Array<{ email: string; error: string }>;
+        if (failures.length > 0) {
+          setInviteStatus(
+            `Some invites failed: ${failures.map((item) => item.email).join(", ")}`
+          );
+        } else {
+          setInviteStatus("Invites sent.");
+        }
+      }
     }
 
     if (isEdit) {
@@ -1407,6 +1500,41 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
               </label>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Invite users (optional)</label>
+          <div className="relative mt-1">
+            <textarea
+              value={inviteEmails}
+              onChange={(event) => setInviteEmails(event.target.value)}
+              className="dr-input w-full rounded px-3 py-2 text-sm"
+              rows={3}
+              placeholder="email1@example.com, email2@example.com"
+              onFocus={() => setShowInviteSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowInviteSuggestions(false), 150)}
+            />
+            {showInviteSuggestions && inviteSuggestions.length > 0 ? (
+              <div className="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white shadow-lg">
+                {inviteSuggestions.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => handleInviteSelect(user.email)}
+                    className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-slate-100"
+                  >
+                    {user.email}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Separate emails with commas or new lines.</p>
+          {inviteLoading ? (
+            <p className="mt-2 text-xs text-slate-500">Sending invites...</p>
+          ) : inviteStatus ? (
+            <p className="mt-2 text-xs text-slate-600">{inviteStatus}</p>
+          ) : null}
         </div>
 
         {error ? (

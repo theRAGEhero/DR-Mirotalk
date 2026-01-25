@@ -243,10 +243,25 @@ model Plan {
   textEntries          PlanTextEntry[]
   transcriptionJobs    TranscriptionJob[]
   guestInvites         PlanGuestInvite[]
+  analyses             PlanAnalysis[]
 
   @@index([createdById])
   @@index([startAt])
   @@index([dataspaceId])
+}
+
+model PlanAnalysis {
+  id        String   @id @default(cuid())
+  planId    String
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  prompt    String
+  provider  String
+  analysis  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([planId])
+  @@index([createdAt])
 }
 
 model TranscriptionJob {

@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ParticipantViewClient } from "@/app/plans/[id]/ParticipantViewClient";
 import { PlanParticipation } from "@/app/plans/[id]/PlanParticipation";
+import { PlanAnalysisPanel } from "@/app/plans/[id]/PlanAnalysisPanel";
 import {
   buildLegacySegments,
   buildPlanSegmentsFromBlocks,
@@ -54,6 +55,11 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
   if (!plan) {
     return <p className="text-sm text-slate-600">Plan not found.</p>;
   }
+
+  const latestAnalysis = await prisma.planAnalysis.findFirst({
+    where: { planId: plan.id },
+    orderBy: { createdAt: "desc" }
+  });
 
   const isAdmin = session.user.role === "ADMIN";
   const isPairParticipant = plan.rounds.some(
@@ -254,6 +260,19 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
         assignments={assignments}
         baseUrl={process.env.DEMOCRACYROUTES_CALL_BASE_URL || ""}
         userEmail={session.user.email}
+      />
+      <PlanAnalysisPanel
+        planId={plan.id}
+        initialAnalysis={
+          latestAnalysis
+            ? {
+                analysis: latestAnalysis.analysis,
+                prompt: latestAnalysis.prompt,
+                provider: latestAnalysis.provider,
+                createdAt: latestAnalysis.createdAt.toISOString()
+              }
+            : null
+        }
       />
       {plan.isPublic ? (
         <div className="dr-card p-6">

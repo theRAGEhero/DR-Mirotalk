@@ -41,6 +41,7 @@ Email is sent via SMTP using `.env` values. If SMTP is not configured, the app w
 - The meeting page can embed the call in an iframe using the same URL.
 - Transcription is fetched from `DEEPGRAM_BASE_URL` or `VOSK_BASE_URL` based on the meeting setting, and shown under the embed. If the meeting is not linked, it auto-detects by matching the meeting `roomId` in the round name.
 - Invites require the user to already exist; no auto-signup in this version.
+- Plan analysis calls analyze-tables-modular using `ANALYZE_TABLES_API_URL` and `ANALYZE_TABLES_API_KEY`.
 
 ## Workflow API (service-to-service)
 
@@ -54,3 +55,4 @@ These endpoints use `x-api-key: <WORKFLOW_API_KEY>` and are read-only:
 - `GET /api/integrations/workflow/meetings/{id}/transcription/words` (optional)
 - `GET /api/integrations/workflow/plans`
 - `GET /api/integrations/workflow/plans/{id}`
+- `GET /api/integrations/workflow/plans/{id}/recap`
