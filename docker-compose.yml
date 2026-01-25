@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  dr-mirotalk:
+  democracyroutes:
     build: .
     ports:
       - "3015:3015"
@@ -12,14 +12,14 @@ services:
       PORT: 3015
       DATABASE_URL: file:/data/dev.db
     volumes:
-      - dr_mirotalk_data:/data
+      - democracyroutes_data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - dr-shared
 
 volumes:
-  dr_mirotalk_data:
+  democracyroutes_data:
 
 networks:
   dr-shared:

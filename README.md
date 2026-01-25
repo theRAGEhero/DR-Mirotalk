@@ -7,7 +7,7 @@ Minimal full-stack app to manage access and links for Democracy Routes call room
 ```bash
 npm install
 cp .env.example .env
-# edit .env and set MIROTALK_BASE_URL + NEXTAUTH_SECRET + DEEPGRAM_BASE_URL
+# edit .env and set DEMOCRACYROUTES_CALL_BASE_URL + NEXTAUTH_SECRET + DEEPGRAM_BASE_URL
 npm run db:push
 npm run db:seed
 npm run dev
@@ -37,7 +37,7 @@ Email is sent via SMTP using `.env` values. If SMTP is not configured, the app w
 
 ## Notes
 
-- The “Join call” button opens a new tab with `${MIROTALK_BASE_URL}/{roomId}?name={email}`.
+- The “Join call” button opens a new tab with `${DEMOCRACYROUTES_CALL_BASE_URL}/{roomId}?name={email}`.
 - The meeting page can embed the call in an iframe using the same URL.
 - Transcription is fetched from `DEEPGRAM_BASE_URL` or `VOSK_BASE_URL` based on the meeting setting, and shown under the embed. If the meeting is not linked, it auto-detects by matching the meeting `roomId` in the round name.
 - Invites require the user to already exist; no auto-signup in this version.

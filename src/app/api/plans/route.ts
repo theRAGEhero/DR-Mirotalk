@@ -109,6 +109,9 @@ export async function POST(request: Request) {
   if (Number.isNaN(startAt.getTime())) {
     return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
   }
+  if (startAt.getTime() < Date.now()) {
+    return NextResponse.json({ error: "Start time must be in the future." }, { status: 400 });
+  }
 
   const users = await prisma.user.findMany({
     where: { id: { in: parsed.data.participantIds } },

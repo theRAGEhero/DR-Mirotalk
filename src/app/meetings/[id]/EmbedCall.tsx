@@ -56,7 +56,7 @@ export function EmbedCall({
   if (!hasBaseUrl) {
     return (
       <p className="mt-3 text-sm text-amber-600">
-        MIROTALK_BASE_URL is not configured.
+        DEMOCRACYROUTES_CALL_BASE_URL is not configured.
       </p>
     );
   }

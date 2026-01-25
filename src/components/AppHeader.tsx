@@ -10,21 +10,71 @@ export function AppHeader() {
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
 
-  if (status === "loading" || !session?.user) {
+  if (status === "loading") {
     return null;
+  }
+
+  if (!session?.user) {
+    return (
+      <header className="sticky top-4 z-20">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 rounded-2xl border border-[color:var(--stroke)] bg-[color:var(--card)] px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.08)] backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:rounded-full">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+            <Link href="/" className="flex items-center gap-2">
+              <span className="h-8 w-8 overflow-hidden rounded-full border border-emerald-200/80 bg-white/80">
+                <img
+                  src="/logo-120.png"
+                  alt="Democracy Routes logo"
+                  className="h-full w-full object-contain"
+                />
+              </span>
+              <span
+                className="text-lg font-semibold text-slate-900"
+                style={{ fontFamily: "var(--font-serif)" }}
+              >
+                Democracy Routes
+              </span>
+            </Link>
+            <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+              <Link href="/" className="hover:text-slate-900">
+                Home
+              </Link>
+              <Link href="/about" className="hover:text-slate-900">
+                About
+              </Link>
+            </nav>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <Link href="/login" className="dr-button px-4 py-2 text-sm">
+              Log in
+            </Link>
+            <Link href="/register" className="dr-button-outline px-4 py-2 text-sm">
+              Create account
+            </Link>
+          </div>
+        </div>
+      </header>
+    );
   }
 
   return (
     <header className="sticky top-4 z-20">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 rounded-2xl border border-[color:var(--stroke)] bg-[color:var(--card)] px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.08)] backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:rounded-full">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-          <Link
-            href="/dashboard"
-            className="text-lg font-semibold text-slate-900"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            Democracy Routes
-          </Link>
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <span className="h-8 w-8 overflow-hidden rounded-full border border-emerald-200/80 bg-white/80">
+                <img
+                  src="/logo-120.png"
+                  alt="Democracy Routes logo"
+                  className="h-full w-full object-contain"
+                />
+              </span>
+              <span
+                className="text-lg font-semibold text-slate-900"
+                style={{ fontFamily: "var(--font-serif)" }}
+              >
+                Democracy Routes
+              </span>
+            </Link>
           <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
             <Link href="/dashboard" className="hover:text-slate-900">
               Dashboard

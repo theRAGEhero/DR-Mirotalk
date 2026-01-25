@@ -11,7 +11,11 @@ const serif = Fraunces({ subsets: ["latin"], variable: "--font-serif" });
 
 export const metadata: Metadata = {
   title: "Democracy Routes",
-  description: "Manage Democracy Routes meeting links"
+  description: "Manage Democracy Routes meeting links",
+  icons: {
+    icon: "/logo-120.png",
+    apple: "/logo-120.png"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

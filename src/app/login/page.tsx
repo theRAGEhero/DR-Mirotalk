@@ -12,9 +12,18 @@ export default async function LoginPage() {
 
   return (
     <div className="dr-card mx-auto mt-20 w-full max-w-md p-6">
-      <h1 className="text-xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
-        Sign in
-      </h1>
+      <div className="flex items-center gap-3">
+        <div className="h-12 w-12 overflow-hidden rounded-2xl border border-emerald-200/80 bg-white/80">
+          <img
+            src="/logo-120.png"
+            alt="Democracy Routes logo"
+            className="h-full w-full object-contain"
+          />
+        </div>
+        <h1 className="text-xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
+          Sign in
+        </h1>
+      </div>
       <p className="mt-1 text-sm text-slate-500">Use your email and password.</p>
       <div className="mt-6">
         <LoginForm />

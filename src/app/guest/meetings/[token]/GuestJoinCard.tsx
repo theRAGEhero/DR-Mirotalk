@@ -39,7 +39,7 @@ export function GuestJoinCard({ active, baseUrl, roomId, language, provider, inv
             rel="noopener noreferrer"
             className="dr-button inline-flex px-4 py-2 text-sm"
           >
-            Join on MiroTalk
+            Join on Democracy Routes
           </a>
         </div>
       ) : (

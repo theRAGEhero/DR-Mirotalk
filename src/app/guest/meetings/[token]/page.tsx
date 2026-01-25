@@ -31,7 +31,7 @@ export default async function GuestMeetingPage({
 
   const meeting = invite.meeting;
   const active = isMeetingActive(meeting);
-  const baseUrl = process.env.MIROTALK_BASE_URL || "";
+  const baseUrl = process.env.DEMOCRACYROUTES_CALL_BASE_URL || "";
   const langCode = meeting.language === "IT" ? "it" : "en";
   const providerCode = meeting.transcriptionProvider === "VOSK" ? "vosk" : "deepgram";
 

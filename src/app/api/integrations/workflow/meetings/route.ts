@@ -145,6 +145,9 @@ export async function POST(request: Request) {
     if (Number.isNaN(start.getTime())) {
       return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
     }
+    if (start.getTime() < Date.now()) {
+      return NextResponse.json({ error: "Start time must be in the future." }, { status: 400 });
+    }
     scheduledStartAt = start;
   }
 

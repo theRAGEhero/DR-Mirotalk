@@ -252,7 +252,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
         }))}
         roundGroups={roundGroups}
         assignments={assignments}
-        baseUrl={process.env.MIROTALK_BASE_URL || ""}
+        baseUrl={process.env.DEMOCRACYROUTES_CALL_BASE_URL || ""}
         userEmail={session.user.email}
       />
       {plan.isPublic ? (

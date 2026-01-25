@@ -123,7 +123,7 @@ export default async function GuestPlanPage({ params }: { params: { token: strin
     }
   );
 
-  const baseUrl = process.env.MIROTALK_BASE_URL || "";
+  const baseUrl = process.env.DEMOCRACYROUTES_CALL_BASE_URL || "";
 
   return (
     <div className="space-y-6">

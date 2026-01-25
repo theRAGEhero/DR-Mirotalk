@@ -84,7 +84,7 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
   const active = isMeetingActive(meeting);
   const isConcluded = !meeting.isActive || (meeting.expiresAt ? meeting.expiresAt.getTime() < Date.now() : false);
   const canEdit = (isAdmin || membership?.role === "HOST" || meeting.createdById === session.user.id) && !isConcluded;
-  const baseUrl = process.env.MIROTALK_BASE_URL || "";
+  const baseUrl = process.env.DEMOCRACYROUTES_CALL_BASE_URL || "";
   const langCode = meeting.language === "IT" ? "it" : "en";
   const providerCode = meeting.transcriptionProvider === "VOSK" ? "vosk" : "deepgram";
   const embedUrl = `${baseUrl}/join/${meeting.roomId}?name=${encodeURIComponent(

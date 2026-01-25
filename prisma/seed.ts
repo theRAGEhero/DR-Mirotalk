@@ -23,7 +23,17 @@ async function main() {
     });
     console.log("Seeded admin user.");
   } else {
-    console.log("Admin user already exists.");
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash,
+        role: "ADMIN",
+        isGuest: false,
+        mustChangePassword: false
+      }
+    });
+    console.log("Admin user updated from env.");
   }
 }
 

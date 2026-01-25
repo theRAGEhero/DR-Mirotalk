@@ -6,7 +6,7 @@ LOG_DIR="${ROOT_DIR}/logs"
 mkdir -p "${LOG_DIR}"
 LOG_FILE="${LOG_DIR}/docker-verify-$(date +%Y%m%d-%H%M%S).log"
 
-CONTAINER_NAME="${CONTAINER_NAME:-dr-mirotalk-dr-mirotalk-1}"
+CONTAINER_NAME="${CONTAINER_NAME:-democracyroutes-democracyroutes-1}"
 
 PASS_COUNT=0
 FAIL_COUNT=0
