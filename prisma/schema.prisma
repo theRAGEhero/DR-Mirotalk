@@ -45,7 +45,8 @@ model User {
   planTemplates      PlanTemplate[]   @relation("PlanTemplateCreator")
   transcriptionJobs  TranscriptionJob[]
   feedbacks          Feedback[]
-  planGuestInvites   PlanGuestInvite[]
+  planGuestInvitesCreated PlanGuestInvite[] @relation("PlanGuestInviteCreator")
+  planGuestInvites   PlanGuestInvite[] @relation("PlanGuestInviteUser")
 
   @@index([role])
   @@index([emailVerificationToken])
@@ -241,6 +242,7 @@ model Plan {
   blocks               PlanBlock[]
   textEntries          PlanTextEntry[]
   transcriptionJobs    TranscriptionJob[]
+  guestInvites         PlanGuestInvite[]
 
   @@index([createdById])
   @@index([startAt])
@@ -388,8 +390,8 @@ model PlanGuestInvite {
   createdAt   DateTime @default(now())
   expiresAt   DateTime?
   plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("PlanGuestInviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  user        User     @relation("PlanGuestInviteUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([planId, email])
   @@index([planId])

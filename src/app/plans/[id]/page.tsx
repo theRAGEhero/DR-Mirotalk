@@ -301,7 +301,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
         requiresApproval={plan.requiresApproval}
         capacity={plan.capacity}
         isDataspaceMember={isDataspaceMember}
-        isFixedParticipant={isParticipant}
+        isFixedParticipant={isPairParticipant}
         participantStatus={participantRecord?.status ?? null}
         pendingRequests={pendingRequests}
         canManageRequests={isAdmin || plan.createdById === session.user.id}

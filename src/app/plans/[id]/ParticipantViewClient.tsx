@@ -134,7 +134,9 @@ export function ParticipantViewClient({
     const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}guest_token=${encodeURIComponent(guestToken)}`;
   };
-  const guestHeaders = guestToken ? { "x-guest-token": guestToken } : {};
+  const guestHeaders: Record<string, string> = guestToken
+    ? { "x-guest-token": guestToken }
+    : {};
 
   const blockById = useMemo(
     () => new Map(blocks.map((block) => [block.id, block])),
