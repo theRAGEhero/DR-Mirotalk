@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { ParticipantViewClient } from "@/app/plans/[id]/ParticipantViewClient";
 import { PlanParticipation } from "@/app/plans/[id]/PlanParticipation";
 import { PlanAnalysisPanel } from "@/app/plans/[id]/PlanAnalysisPanel";
@@ -56,10 +57,26 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
     return <p className="text-sm text-slate-600">Plan not found.</p>;
   }
 
-  const latestAnalysis = await prisma.planAnalysis.findFirst({
-    where: { planId: plan.id },
-    orderBy: { createdAt: "desc" }
-  });
+  let latestAnalysis: {
+    analysis: string;
+    prompt: string;
+    provider: string;
+    createdAt: Date;
+  } | null = null;
+
+  try {
+    latestAnalysis = await prisma.planAnalysis.findFirst({
+      where: { planId: plan.id },
+      orderBy: { createdAt: "desc" }
+    });
+  } catch (error) {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      !["P2021", "P2022"].includes(error.code)
+    ) {
+      throw error;
+    }
+  }
 
   const isAdmin = session.user.role === "ADMIN";
   const isPairParticipant = plan.rounds.some(

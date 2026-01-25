@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPlanViewer } from "@/lib/planGuests";
 import { getPlanRecapData, isPlanRecapError } from "@/lib/planRecap";
@@ -28,10 +29,28 @@ export async function GET(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  const latest = await prisma.planAnalysis.findFirst({
-    where: { planId: params.id },
-    orderBy: { createdAt: "desc" }
-  });
+  let latest: {
+    analysis: string;
+    prompt: string;
+    provider: string;
+    createdAt: Date;
+  } | null = null;
+
+  try {
+    latest = await prisma.planAnalysis.findFirst({
+      where: { planId: params.id },
+      orderBy: { createdAt: "desc" }
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      ["P2021", "P2022"].includes(error.code)
+    ) {
+      return NextResponse.json({ analysis: null });
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   if (!latest) {
     return NextResponse.json({ analysis: null });
@@ -99,20 +118,37 @@ export async function POST(
 
   const payload = await response.json();
 
-  const saved = await prisma.planAnalysis.create({
-    data: {
-      planId: params.id,
-      prompt: parsed.data.prompt,
-      provider,
-      analysis: payload.analysis
-    }
-  });
+  try {
+    const saved = await prisma.planAnalysis.create({
+      data: {
+        planId: params.id,
+        prompt: parsed.data.prompt,
+        provider,
+        analysis: payload.analysis
+      }
+    });
 
-  return NextResponse.json({
-    analysis: saved.analysis,
-    prompt: saved.prompt,
-    provider: saved.provider,
-    createdAt: saved.createdAt.toISOString(),
-    metadata: payload.metadata ?? null
-  });
+    return NextResponse.json({
+      analysis: saved.analysis,
+      prompt: saved.prompt,
+      provider: saved.provider,
+      createdAt: saved.createdAt.toISOString(),
+      metadata: payload.metadata ?? null
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      ["P2021", "P2022"].includes(error.code)
+    ) {
+      return NextResponse.json({
+        analysis: payload.analysis,
+        prompt: parsed.data.prompt,
+        provider,
+        createdAt: new Date().toISOString(),
+        metadata: payload.metadata ?? null
+      });
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
