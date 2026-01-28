@@ -15,6 +15,164 @@ type PlanAnalysisPanelProps = {
   } | null;
 };
 
+type InlineChunk = { type: "text" | "bold" | "code"; value: string };
+
+function parseInlineMarkdown(text: string): InlineChunk[] {
+  const chunks: InlineChunk[] = [];
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      chunks.push({ type: "text", value: text.slice(lastIndex, match.index) });
+    }
+    const token = match[0];
+    if (token.startsWith("**")) {
+      chunks.push({ type: "bold", value: token.slice(2, -2) });
+    } else if (token.startsWith("`")) {
+      chunks.push({ type: "code", value: token.slice(1, -1) });
+    }
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < text.length) {
+    chunks.push({ type: "text", value: text.slice(lastIndex) });
+  }
+
+  return chunks;
+}
+
+function renderInline(text: string) {
+  return parseInlineMarkdown(text).map((chunk, index) => {
+    if (chunk.type === "bold") {
+      return <strong key={`bold-${index}`}>{chunk.value}</strong>;
+    }
+    if (chunk.type === "code") {
+      return (
+        <code
+          key={`code-${index}`}
+          className="rounded bg-slate-100 px-1 py-0.5 text-[0.85em]"
+        >
+          {chunk.value}
+        </code>
+      );
+    }
+    return <span key={`text-${index}`}>{chunk.value}</span>;
+  });
+}
+
+function renderMarkdownBlocks(markdown: string) {
+  const lines = markdown.split(/\r?\n/);
+  const blocks: JSX.Element[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index].trimEnd();
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("### ")) {
+      blocks.push(
+        <h3 key={`h3-${index}`} className="text-base font-semibold text-slate-900">
+          {renderInline(trimmed.slice(4))}
+        </h3>
+      );
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("## ")) {
+      blocks.push(
+        <h2 key={`h2-${index}`} className="text-lg font-semibold text-slate-900">
+          {renderInline(trimmed.slice(3))}
+        </h2>
+      );
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("# ")) {
+      blocks.push(
+        <h1 key={`h1-${index}`} className="text-xl font-semibold text-slate-900">
+          {renderInline(trimmed.slice(2))}
+        </h1>
+      );
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const current = lines[index].trim();
+        if (!current.startsWith("* ") && !current.startsWith("- ")) break;
+        items.push(current.slice(2));
+        index += 1;
+      }
+      blocks.push(
+        <ul key={`ul-${index}`} className="list-disc space-y-1 pl-5 text-slate-700">
+          {items.map((item, itemIndex) => (
+            <li key={`ul-item-${itemIndex}`}>{renderInline(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const current = lines[index].trim();
+        if (!/^\d+\.\s+/.test(current)) break;
+        items.push(current.replace(/^\d+\.\s+/, ""));
+        index += 1;
+      }
+      blocks.push(
+        <ol key={`ol-${index}`} className="list-decimal space-y-1 pl-5 text-slate-700">
+          {items.map((item, itemIndex) => (
+            <li key={`ol-item-${itemIndex}`}>{renderInline(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index].trimEnd();
+      const currentTrimmed = current.trim();
+      if (
+        !currentTrimmed ||
+        currentTrimmed.startsWith("# ") ||
+        currentTrimmed.startsWith("## ") ||
+        currentTrimmed.startsWith("### ") ||
+        currentTrimmed.startsWith("* ") ||
+        currentTrimmed.startsWith("- ") ||
+        /^\d+\.\s+/.test(currentTrimmed)
+      ) {
+        break;
+      }
+      paragraphLines.push(currentTrimmed);
+      index += 1;
+    }
+    const paragraph = paragraphLines.join(" ");
+    if (paragraph) {
+      blocks.push(
+        <p key={`p-${index}`} className="text-sm text-slate-700">
+          {renderInline(paragraph)}
+        </p>
+      );
+    }
+  }
+
+  return blocks;
+}
+
 export function PlanAnalysisPanel({ planId, initialAnalysis }: PlanAnalysisPanelProps) {
   const [prompt, setPrompt] = useState(initialAnalysis?.prompt ?? DEFAULT_PROMPT);
   const [provider, setProvider] = useState<"gemini" | "ollama">(
@@ -117,8 +275,8 @@ export function PlanAnalysisPanel({ planId, initialAnalysis }: PlanAnalysisPanel
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {analysis ? (
-        <div className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm text-slate-700 whitespace-pre-wrap">
-          {analysis}
+        <div className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm text-slate-700 space-y-3">
+          {renderMarkdownBlocks(analysis)}
         </div>
       ) : (
         <p className="text-sm text-slate-500">No analysis yet.</p>

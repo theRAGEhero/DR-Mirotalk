@@ -551,7 +551,7 @@ export function ParticipantViewClient({
   async function refreshPlanRecap() {
     setRecapLoading(true);
     setRecapError(null);
-    const response = await fetch(withGuestToken(`/api/plans/${planId}/recap`));
+    const response = await fetch(withGuestToken(`/api/plans/${planId}/recap?refresh=1`));
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       setRecapError("Unable to load plan recap.");
