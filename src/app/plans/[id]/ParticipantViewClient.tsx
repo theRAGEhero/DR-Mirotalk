@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TranscriptionPanel } from "@/app/meetings/[id]/TranscriptionPanel";
 import { MeditationRoundEmbed } from "@/app/plans/[id]/MeditationRoundEmbed";
+import { RecordRoundEmbed } from "@/app/plans/[id]/RecordRoundEmbed";
 import { buildLegacySegments, buildPlanSegmentsFromBlocks, getSegmentAtTime } from "@/lib/planSchedule";
 import { renderPosterHtml } from "@/lib/poster";
 
@@ -32,7 +33,7 @@ type Props = {
   meditationAudioUrl?: string | null;
   blocks: Array<{
     id: string;
-    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
     durationSeconds: number;
     roundNumber: number | null;
     meditationAnimationId?: string | null;
@@ -108,6 +109,17 @@ export function ParticipantViewClient({
   const [completedMeditations, setCompletedMeditations] = useState<Set<number>>(
     () => new Set()
   );
+  type RecordSession = {
+    id: string;
+    blockId: string;
+    transcriptText: string | null;
+    createdAt: string;
+  };
+  const [recordSessions, setRecordSessions] = useState<RecordSession[]>([]);
+  const [sendingRecord, setSendingRecord] = useState(false);
+  const [completedRecordBlocks, setCompletedRecordBlocks] = useState<Set<string>>(
+    () => new Set()
+  );
   const [textEntry, setTextEntry] = useState("");
   const [textEntryStatus, setTextEntryStatus] = useState<"idle" | "loading" | "saving" | "saved" | "error">("idle");
   const [textBlockId, setTextBlockId] = useState<string | null>(null);
@@ -118,6 +130,9 @@ export function ParticipantViewClient({
   >([]);
   const [planRecapMeditations, setPlanRecapMeditations] = useState<
     Array<{ meditationIndex: number; roundAfter: number | null; transcriptText: string; userEmail: string }>
+  >([]);
+  const [planRecapRecordSessions, setPlanRecapRecordSessions] = useState<
+    Array<{ blockId: string; transcriptText: string; userEmail: string }>
   >([]);
   const [planRecapParticipants, setPlanRecapParticipants] = useState<string[]>([]);
   const [planRecapMeetingTranscripts, setPlanRecapMeetingTranscripts] = useState<
@@ -194,6 +209,25 @@ export function ParticipantViewClient({
       );
     }
     loadSessions();
+    return () => {
+      active = false;
+    };
+  }, [planId]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadRecordSessions() {
+      const response = await fetch(withGuestToken(`/api/plans/${planId}/record`));
+      if (!response.ok) return;
+      const payload = await response.json().catch(() => null);
+      if (!active) return;
+      const sessions: RecordSession[] = Array.isArray(payload?.sessions)
+        ? payload.sessions
+        : [];
+      setRecordSessions(sessions);
+      setCompletedRecordBlocks(new Set(sessions.map((session) => session.blockId)));
+    }
+    loadRecordSessions();
     return () => {
       active = false;
     };
@@ -362,6 +396,9 @@ export function ParticipantViewClient({
       : meditationAudioUrl;
   const posterActive = status === "active" && currentSegment?.type === "POSTER";
   const textActive = status === "active" && currentSegment?.type === "TEXT";
+  const recordActive = status === "active" && currentSegment?.type === "RECORD";
+  const recordIndex = currentSegment?.recordIndex ?? 0;
+  const recordBlockId = currentSegment?.blockId ?? null;
   const experienceContainerClass = showModal
     ? "h-full min-h-0"
     : "min-h-[72vh] h-[72vh]";
@@ -428,6 +465,21 @@ export function ParticipantViewClient({
       onComplete={handleMeditationComplete}
       className={experienceContainerClass}
     />
+  ) : recordActive ? (
+    recordBlockId && completedRecordBlocks.has(recordBlockId) ? (
+      <div
+        className={`flex items-center justify-center rounded-3xl border border-white/10 bg-slate-950/70 px-6 py-10 text-center text-slate-200 ${experienceContainerClass}`}
+      >
+        <p className="text-lg">Recording saved.</p>
+      </div>
+    ) : (
+      <RecordRoundEmbed
+        recordIndex={recordIndex}
+        endsAtMs={segmentEnd}
+        onComplete={handleRecordComplete}
+        className={experienceContainerClass}
+      />
+    )
   ) : status === "active" && assignment && !assignment.isBreak ? (
     <div
       className={`overflow-hidden rounded-2xl border border-slate-700 bg-slate-950/80 ${experienceContainerClass} ${
@@ -560,6 +612,7 @@ export function ParticipantViewClient({
     }
     setPlanRecapTextEntries(payload?.textEntries ?? []);
     setPlanRecapMeditations(payload?.meditationSessions ?? []);
+    setPlanRecapRecordSessions(payload?.recordSessions ?? []);
     setPlanRecapMeetingTranscripts(payload?.meetingTranscripts ?? []);
     setPlanRecapParticipants(payload?.participants ?? []);
     setRecapLoading(false);
@@ -570,6 +623,7 @@ export function ParticipantViewClient({
     if (
       planRecapTextEntries.length > 0 ||
       planRecapMeditations.length > 0 ||
+      planRecapRecordSessions.length > 0 ||
       planRecapMeetingTranscripts.length > 0
     ) {
       return;
@@ -580,6 +634,7 @@ export function ParticipantViewClient({
     status,
     planRecapTextEntries.length,
     planRecapMeditations.length,
+    planRecapRecordSessions.length,
     planRecapMeetingTranscripts.length
   ]);
 
@@ -618,6 +673,35 @@ export function ParticipantViewClient({
     setCompletedMeditations((prev) => new Set([...prev, index]));
   }
 
+  async function handleRecordComplete(audio: Blob, index: number | null) {
+    if (!recordBlockId) return;
+    if (completedRecordBlocks.has(recordBlockId)) return;
+    if (!audio || audio.size === 0) return;
+    setSendingRecord(true);
+    const formData = new FormData();
+    formData.append("audio", audio, `record-${index ?? "block"}.webm`);
+    formData.append("blockId", recordBlockId);
+    const response = await fetch(withGuestToken(`/api/plans/${planId}/record/transcribe`), {
+      method: "POST",
+      headers: guestHeaders,
+      body: formData
+    });
+    const payload = await response.json().catch(() => null);
+    setSendingRecord(false);
+    if (!response.ok) return;
+    setRecordSessions((prev) => {
+      const next = prev.filter((session) => session.blockId !== payload.blockId);
+      next.push({
+        id: payload.id,
+        blockId: payload.blockId,
+        transcriptText: payload.transcriptText ?? null,
+        createdAt: new Date().toISOString()
+      });
+      return next;
+    });
+    setCompletedRecordBlocks((prev) => new Set([...prev, recordBlockId]));
+  }
+
   return (
     <div className="dr-card dr-card-no-filter p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -644,6 +728,9 @@ export function ParticipantViewClient({
                   : "Prompt"
                 : null}
               {status === "active" && currentSegment?.type === "TEXT" ? "Notes" : null}
+              {status === "active" && currentSegment?.type === "RECORD"
+                ? `Record ${recordIndex || ""}`.trim()
+                : null}
               {status === "active" && currentSegment?.type === "ROUND"
                 ? `Pairing ${currentRound} of ${roundsCount}`
                 : null}
@@ -658,6 +745,7 @@ export function ParticipantViewClient({
               {currentSegment?.type === "MEDITATION" ? "Solo" : null}
               {currentSegment?.type === "POSTER" ? "Focus" : null}
               {currentSegment?.type === "TEXT" ? "Your notes" : null}
+              {currentSegment?.type === "RECORD" ? "Solo" : null}
               {currentSegment?.type === "ROUND" ? (assignment ? assignment.partnerLabel : "-") : null}
             </span>
             {status === "pending" ? (
@@ -702,7 +790,11 @@ export function ParticipantViewClient({
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
             <span className="font-semibold text-slate-700">Experience</span>
             <span className="text-slate-700">
-              {currentSegment?.type === "ROUND" ? "1:1 call" : currentSegment?.type ?? "Waiting"}
+              {currentSegment?.type === "ROUND"
+                ? "1:1 call"
+                : currentSegment?.type === "RECORD"
+                  ? "Record"
+                  : currentSegment?.type ?? "Waiting"}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -714,6 +806,7 @@ export function ParticipantViewClient({
               {currentSegment?.type === "MEDITATION" ? "Solo" : null}
               {currentSegment?.type === "POSTER" ? "Focus" : null}
               {currentSegment?.type === "TEXT" ? "Your notes" : null}
+              {currentSegment?.type === "RECORD" ? "Solo" : null}
               {currentSegment?.type === "ROUND" ? (assignment ? assignment.partnerLabel : "-") : null}
             </span>
             {meditationActive ? (
@@ -724,6 +817,11 @@ export function ParticipantViewClient({
               >
                 {meditationMuted ? "Unmute music" : "Mute music"}
               </button>
+            ) : null}
+            {recordActive && sendingRecord ? (
+              <span className="rounded-full border border-sky-200/60 bg-sky-50 px-3 py-1 text-[10px] font-semibold uppercase text-sky-700">
+                Uploading...
+              </span>
             ) : null}
             <button
               type="button"
@@ -947,6 +1045,64 @@ export function ParticipantViewClient({
                             </p>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (segment.type === "RECORD") {
+                const sessions =
+                  recapView === "plan" && segment.blockId
+                    ? planRecapRecordSessions.filter((item) => item.blockId === segment.blockId)
+                    : recordSessions
+                        .filter((item) => item.blockId === segment.blockId)
+                        .map((item) => ({
+                          blockId: item.blockId,
+                          transcriptText: item.transcriptText ?? "",
+                          userEmail: userEmail
+                        }));
+                return (
+                  <div
+                    key={`recap-record-${index}`}
+                    className="rounded-2xl border border-sky-200/60 bg-sky-50/70 px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase text-sky-700">
+                        Record {segment.recordIndex ?? ""}
+                      </p>
+                      <p className="text-xs text-sky-700/70">
+                        Duration {formatDuration(durationSeconds)}
+                      </p>
+                    </div>
+                    {recapView === "personal" ? (
+                      <p className="mt-2 text-sm text-sky-900">
+                        {sessions[0]?.transcriptText || "Recording saved."}
+                      </p>
+                    ) : (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm text-sky-900">
+                        {(planRecapParticipants.length ? planRecapParticipants : [userEmail]).map(
+                          (participant) => {
+                            const entryItem = sessions.find(
+                              (item) => item.userEmail === participant
+                            );
+                            return (
+                              <div
+                                key={`${participant}-${segment.blockId}`}
+                                className="rounded border border-sky-200/60 bg-white/70 px-3 py-2"
+                              >
+                                <p className="text-xs font-semibold uppercase text-sky-700">
+                                  {participant}
+                                </p>
+                                <p className="mt-1 text-sm text-sky-900">
+                                  {entryItem?.transcriptText
+                                    ? entryItem.transcriptText
+                                    : "No recording transcript."}
+                                </p>
+                              </div>
+                            );
+                          }
+                        )}
                       </div>
                     )}
                   </div>

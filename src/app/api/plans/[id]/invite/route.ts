@@ -5,6 +5,7 @@ import { sendMail } from "@/lib/mailer";
 import { inviteMemberSchema } from "@/lib/validators";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { checkRateLimit, getRequestIp } from "@/lib/rateLimit";
 
 function generateToken() {
   return crypto.randomBytes(24).toString("base64url");
@@ -17,6 +18,19 @@ export async function POST(
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getRequestIp(request);
+  const rate = checkRateLimit({
+    key: `plan-invite:${session.user.id}:${ip}`,
+    limit: 20,
+    windowMs: 10 * 60 * 1000
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many invites. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
   }
 
   const plan = await prisma.plan.findUnique({

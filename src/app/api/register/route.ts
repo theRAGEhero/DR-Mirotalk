@@ -4,8 +4,22 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { registerSchema } from "@/lib/validators";
 import { sendMail } from "@/lib/mailer";
+import { checkRateLimit, getRequestIp } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
+  const ip = getRequestIp(request);
+  const rate = checkRateLimit({
+    key: `register:${ip}`,
+    limit: 8,
+    windowMs: 10 * 60 * 1000
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many registration attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = registerSchema.safeParse(body);
   if (!parsed.success) {

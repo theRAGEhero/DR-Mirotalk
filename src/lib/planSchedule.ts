@@ -1,4 +1,4 @@
-export type PlanBlockType = "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+export type PlanBlockType = "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
 
 export type PlanBlockInput = {
   id?: string | null;
@@ -13,6 +13,7 @@ export type PlanSegment = {
   blockId?: string | null;
   roundNumber?: number | null;
   meditationIndex?: number;
+  recordIndex?: number;
   roundAfter?: number | null;
   posterId?: string | null;
   startAtMs: number;
@@ -91,6 +92,7 @@ export function buildPlanSegmentsFromBlocks(startAt: Date, blocks: PlanBlockInpu
   const segments: PlanSegment[] = [];
   let cursor = startAt.getTime();
   let meditationIndex = 0;
+  let recordIndex = 0;
   let lastRoundNumber = 0;
 
   const roundNumbers = blocks
@@ -101,6 +103,9 @@ export function buildPlanSegmentsFromBlocks(startAt: Date, blocks: PlanBlockInpu
     const durationMs = Math.max(1, block.durationSeconds) * 1000;
     if (block.type === "MEDITATION") {
       meditationIndex += 1;
+    }
+    if (block.type === "RECORD") {
+      recordIndex += 1;
     }
     if (block.type === "ROUND" && block.roundNumber) {
       lastRoundNumber = block.roundNumber;
@@ -115,6 +120,7 @@ export function buildPlanSegmentsFromBlocks(startAt: Date, blocks: PlanBlockInpu
       blockId: block.id ?? null,
       roundNumber: block.roundNumber ?? null,
       meditationIndex: block.type === "MEDITATION" ? meditationIndex : undefined,
+      recordIndex: block.type === "RECORD" ? recordIndex : undefined,
       roundAfter: block.type !== "ROUND" ? nextRoundNumber : null,
       posterId: block.posterId ?? null,
       startAtMs: cursor,

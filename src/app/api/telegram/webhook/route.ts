@@ -23,13 +23,21 @@ export async function POST(request: Request) {
   if (!botToken) {
     return NextResponse.json({ error: "Telegram bot token not configured" }, { status: 500 });
   }
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (secret) {
+    const provided = request.headers.get("x-telegram-bot-api-secret-token");
+    if (provided !== secret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
 
   const payload = await request.json().catch(() => null);
   const message = payload?.message ?? payload?.edited_message ?? null;
   const text = typeof message?.text === "string" ? message.text.trim() : "";
   const chatId = message?.chat?.id ? String(message.chat.id) : null;
 
-  if (chatId && (text === "/start" || text === "/help")) {
+  const commandMatch = text.match(/^\/(start|help)(@\w+)?(\s|$)/i);
+  if (chatId && commandMatch) {
     await sendTelegramMessage(
       botToken,
       chatId,
@@ -41,6 +49,9 @@ export async function POST(request: Request) {
         "Need help? Contact your admin."
       ].join("\n")
     );
+    return NextResponse.json({ ok: true });
+  }
+  if (text.startsWith("/")) {
     return NextResponse.json({ ok: true });
   }
   const code = normalizeCode(text);

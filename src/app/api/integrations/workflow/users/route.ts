@@ -17,14 +17,16 @@ export async function GET(request: Request) {
 
   const members = await prisma.dataspaceMember.findMany({
     where: { dataspaceId },
-    include: { user: { select: { id: true, email: true } } },
+    include: { user: { select: { id: true, email: true, isDeleted: true } } },
     orderBy: { createdAt: "asc" }
   });
 
   return NextResponse.json({
-    users: members.map((member: (typeof members)[number]) => ({
-      id: member.user.id,
-      email: member.user.email
-    }))
+    users: members
+      .filter((member: (typeof members)[number]) => !member.user.isDeleted)
+      .map((member: (typeof members)[number]) => ({
+        id: member.user.id,
+        email: member.user.email
+      }))
   });
 }

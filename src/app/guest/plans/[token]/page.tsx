@@ -159,7 +159,7 @@ export default async function GuestPlanPage({ params }: { params: { token: strin
         meditationAudioUrl={plan.meditationAudioUrl}
         blocks={plan.blocks.map((block: (typeof plan.blocks)[number]) => ({
           id: block.id,
-          type: block.type as "ROUND" | "MEDITATION" | "POSTER" | "TEXT",
+          type: block.type as "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD",
           durationSeconds: block.durationSeconds,
           roundNumber: block.roundNumber,
           meditationAnimationId: block.meditationAnimationId ?? null,

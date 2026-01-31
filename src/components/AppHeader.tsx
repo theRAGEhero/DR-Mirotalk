@@ -79,6 +79,9 @@ export function AppHeader() {
             <Link href="/dashboard" className="hover:text-slate-900">
               Dashboard
             </Link>
+            <Link href="/plans" className="hover:text-slate-900">
+              Plans
+            </Link>
             <Link href="/dataspace" className="hover:text-slate-900">
               Dataspace
             </Link>
@@ -109,13 +112,6 @@ export function AppHeader() {
                     className="block rounded px-2 py-2 text-slate-700 hover:bg-slate-100"
                   >
                     New plan
-                  </Link>
-                  <Link
-                    href="/texts/new"
-                    onClick={() => setShowNewMenu(false)}
-                    className="block rounded px-2 py-2 text-slate-700 hover:bg-slate-100"
-                  >
-                    New text
                   </Link>
                 </div>
               ) : null}

@@ -4,6 +4,8 @@ import { getSession } from "@/lib/session";
 import { createPlanSchema } from "@/lib/validators";
 import { notifyDataspaceSubscribers } from "@/lib/dataspaceNotifications";
 import crypto from "crypto";
+import bcrypt from "bcrypt";
+import { checkRateLimit, getRequestIp } from "@/lib/rateLimit";
 
 function generateRoomId(language: string, transcriptionProvider: string) {
   const providerLabel =
@@ -16,9 +18,21 @@ function generateRoomId(language: string, transcriptionProvider: string) {
   return `${base}-${language}-${providerLabel}`;
 }
 
-function makeGroups(userIds: string[], maxParticipantsPerRoom: number) {
+function makeGroups(
+  userIds: string[],
+  maxParticipantsPerRoom: number,
+  allowOddGroup: boolean
+) {
   const list = [...userIds];
   if (maxParticipantsPerRoom === 2 && list.length % 2 === 1) {
+    if (allowOddGroup && list.length >= 3) {
+      const groups: Array<string[]> = [];
+      for (let i = 0; i < list.length - 3; i += 2) {
+        groups.push(list.slice(i, i + 2));
+      }
+      groups.push(list.slice(list.length - 3));
+      return groups;
+    }
     list.push("__break__");
   }
 
@@ -38,7 +52,7 @@ function rotate(userIds: string[]) {
 }
 
 type BlockInput = {
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
   posterId?: string | null;
   meditationAnimationId?: string | null;
@@ -99,11 +113,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const ip = getRequestIp(request);
+  const rate = checkRateLimit({
+    key: `plan-create:${session.user.id}:${ip}`,
+    limit: 10,
+    windowMs: 10 * 60 * 1000
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = createPlanSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
+
+  const invitedEmails = Array.from(
+    new Set(
+      (parsed.data.inviteEmails ?? [])
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
 
   const startAt = new Date(parsed.data.startAt);
   if (Number.isNaN(startAt.getTime())) {
@@ -113,14 +148,70 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Start time must be in the future." }, { status: 400 });
   }
 
+  const participantsById = new Set(parsed.data.participantIds);
+  const existingUsers = parsed.data.participantIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: parsed.data.participantIds } },
+        select: { id: true, email: true }
+      })
+    : [];
+
+  const existingEmails = new Set(
+    existingUsers.map((user: (typeof existingUsers)[number]) => user.email.toLowerCase())
+  );
+
+  const inviteTargets = invitedEmails.filter((email) => !existingEmails.has(email));
+  const inviteUsers =
+    inviteTargets.length > 0
+      ? await prisma.user.findMany({
+          where: { email: { in: inviteTargets } },
+          select: { id: true, email: true, isGuest: true }
+        })
+      : [];
+
+  const missingInviteEmails = inviteTargets.filter(
+    (email) =>
+      !inviteUsers.some(
+        (user: (typeof inviteUsers)[number]) => user.email.toLowerCase() === email
+      )
+  );
+
+  if (missingInviteEmails.length > 0) {
+    const createUsers = await Promise.all(
+      missingInviteEmails.map(async (email) => {
+        const tempPassword = crypto.randomBytes(32).toString("base64url");
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+        return prisma.user.create({
+          data: {
+            email,
+            passwordHash,
+            role: "USER",
+            isGuest: true,
+            mustChangePassword: false,
+            emailVerifiedAt: null
+          },
+          select: { id: true, email: true, isGuest: true }
+        });
+      })
+    );
+    createUsers.forEach((user: (typeof createUsers)[number]) => inviteUsers.push(user));
+  }
+
+  existingUsers.forEach((user: (typeof existingUsers)[number]) => participantsById.add(user.id));
+  inviteUsers.forEach((user: (typeof inviteUsers)[number]) => participantsById.add(user.id));
+
+  const participants = Array.from(participantsById);
+  if (participants.length < 1) {
+    return NextResponse.json(
+      { error: "Select at least one participant (including invited guests)." },
+      { status: 400 }
+    );
+  }
+
   const users = await prisma.user.findMany({
-    where: { id: { in: parsed.data.participantIds } },
+    where: { id: { in: participants } },
     select: { id: true }
   });
-
-  if (users.length < 2) {
-    return NextResponse.json({ error: "Not enough valid participants" }, { status: 400 });
-  }
 
   if (parsed.data.dataspaceId) {
     const dataspace = await prisma.dataspace.findUnique({
@@ -136,6 +227,7 @@ export async function POST(request: Request) {
   }
 
   const maxParticipantsPerRoom = parsed.data.maxParticipantsPerRoom;
+  const allowOddGroup = Boolean(parsed.data.allowOddGroup);
   const blocksInput =
     parsed.data.blocks && parsed.data.blocks.length > 0
       ? parsed.data.blocks
@@ -146,7 +238,9 @@ export async function POST(request: Request) {
   );
 
   if (roundBlocks.length < 1) {
-    return NextResponse.json({ error: "Add at least one round block." }, { status: 400 });
+    if (blocksInput.length < 1) {
+      return NextResponse.json({ error: "Add at least one block." }, { status: 400 });
+    }
   }
   if (missingPoster) {
     return NextResponse.json({ error: "Select a poster for every poster block." }, { status: 400 });
@@ -176,7 +270,7 @@ export async function POST(request: Request) {
   }>;
 
   for (let i = 0; i < roundBlocks.length; i += 1) {
-    const groups = makeGroups(rotation, maxParticipantsPerRoom);
+    const groups = makeGroups(rotation, maxParticipantsPerRoom, allowOddGroup);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId(parsed.data.language, parsed.data.transcriptionProvider);
       const roomPairs: Array<{ userAId: string; userBId: string | null; roomId: string }> = [];
@@ -225,7 +319,9 @@ export async function POST(request: Request) {
       dataspaceId: parsed.data.dataspaceId ?? null,
       startAt,
       timezone: parsed.data.timezone || null,
-      roundDurationMinutes: Math.max(1, Math.round(firstRoundSeconds / 60)),
+      roundDurationMinutes: roundBlocks.length
+        ? Math.max(1, Math.round(firstRoundSeconds / 60))
+        : Math.max(1, parsed.data.roundDurationMinutes),
       roundsCount: roundBlocks.length,
       syncMode: parsed.data.syncMode,
       maxParticipantsPerRoom,

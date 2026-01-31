@@ -27,7 +27,7 @@ export const authOptions: NextAuthOptions = {
           where: { email: parsed.data.email }
         });
 
-        if (!user) {
+        if (!user || user.isDeleted) {
           return null;
         }
 

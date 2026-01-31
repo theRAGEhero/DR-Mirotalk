@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { ParticipantViewClient } from "@/app/plans/[id]/ParticipantViewClient";
 import { PlanParticipation } from "@/app/plans/[id]/PlanParticipation";
 import { PlanAnalysisPanel } from "@/app/plans/[id]/PlanAnalysisPanel";
+import { StartNowButton } from "@/app/plans/[id]/StartNowButton";
 import {
   buildLegacySegments,
   buildPlanSegmentsFromBlocks,
@@ -104,7 +105,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
   const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
     (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
       const type = block.type as PlanBlockType;
-      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"].includes(type)) {
         return acc;
       }
       acc.push({
@@ -132,7 +133,9 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
           meditationDurationMinutes: plan.meditationDurationMinutes
         });
   const { totalEndMs } = schedule;
-  const canEdit = (isAdmin || plan.createdById === session.user.id) && Date.now() <= totalEndMs;
+  const isOwner = plan.createdById === session.user.id;
+  const canEdit = (isAdmin || isOwner) && Date.now() <= totalEndMs;
+  const canStartNow = (isAdmin || isOwner) && plan.startAt.getTime() > Date.now();
 
   const participantRecord = plan.participants.find(
     (participant: (typeof plan.participants)[number]) =>
@@ -148,6 +151,23 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
       email: participant.user.email
     }));
 
+  const allRoomIds = Array.from(
+    new Set(
+      plan.rounds.flatMap((round) =>
+        round.pairs.map((pair) => pair.roomId).filter(Boolean)
+      )
+    )
+  ) as string[];
+  const meetingsByRoomId = allRoomIds.length
+    ? await prisma.meeting.findMany({
+        where: { roomId: { in: allRoomIds } },
+        select: { id: true, roomId: true }
+      })
+    : [];
+  const meetingIdByRoom = new Map(
+    meetingsByRoomId.map((meeting) => [meeting.roomId, meeting.id])
+  );
+
   const assignments = plan.rounds.map(
     (round: (typeof plan.rounds)[number]) => {
     const rooms = new Map<string, string[]>();
@@ -160,8 +180,9 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
       if (pair.userA?.email) list.push(pair.userA.email);
       if (pair.userB?.email) list.push(pair.userB.email);
       rooms.set(pair.roomId, list);
-      if (pair.meetingId) {
-        meetingByRoom.set(pair.roomId, pair.meetingId);
+      const meetingId = pair.meetingId ?? meetingIdByRoom.get(pair.roomId) ?? null;
+      if (meetingId) {
+        meetingByRoom.set(pair.roomId, meetingId);
       }
     });
 
@@ -201,8 +222,9 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
       if (pair.userA?.email) list.push(pair.userA.email);
       if (pair.userB?.email) list.push(pair.userB.email);
       rooms.set(pair.roomId, list);
-      if (pair.meetingId) {
-        meetingByRoom.set(pair.roomId, pair.meetingId);
+      const meetingId = pair.meetingId ?? meetingIdByRoom.get(pair.roomId) ?? null;
+      if (meetingId) {
+        meetingByRoom.set(pair.roomId, meetingId);
       }
     });
     return {
@@ -240,11 +262,14 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
           </h1>
           <p className="text-sm text-slate-600">Personalized call link and pairing status.</p>
         </div>
-        {canEdit ? (
-          <Link href={`/plans/${plan.id}/edit`} className="dr-button-outline px-3 py-1 text-xs">
-            Edit plan
-          </Link>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {canStartNow ? <StartNowButton planId={plan.id} /> : null}
+          {canEdit ? (
+            <Link href={`/plans/${plan.id}/edit`} className="dr-button-outline px-3 py-1 text-xs">
+              Edit plan
+            </Link>
+          ) : null}
+        </div>
       </div>
       <ParticipantViewClient
         planId={plan.id}

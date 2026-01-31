@@ -12,6 +12,7 @@ export default async function PlanBuilderPage() {
 
   const [users, dataspaces] = await Promise.all([
     prisma.user.findMany({
+      where: { isDeleted: false },
       orderBy: { createdAt: "asc" },
       select: { id: true, email: true }
     }),

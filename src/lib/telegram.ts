@@ -31,6 +31,9 @@ export function normalizeTelegramHandle(handle: string | null | undefined) {
 export async function resolveTelegramChatId(handle: string) {
   const baseUrl = getTelegramBaseUrl();
   if (!baseUrl) return null;
+  if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+    return null;
+  }
 
   try {
     const response = await fetch(`${baseUrl}/getUpdates`);

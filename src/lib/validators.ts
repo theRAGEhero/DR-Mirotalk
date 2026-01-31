@@ -35,9 +35,11 @@ export const createPlanSchema = z.object({
   startAt: z.string().min(1, "Start time is required"),
   roundDurationMinutes: z.number().int().positive().max(240),
   roundsCount: z.number().int().positive().max(100),
-  participantIds: z.array(z.string().min(1)).min(2, "Select at least two participants"),
+  participantIds: z.array(z.string().min(1)),
+  inviteEmails: z.array(z.string().email("Invalid email")).optional(),
   syncMode: z.enum(["SERVER", "CLIENT"]).default("SERVER"),
   maxParticipantsPerRoom: z.number().int().min(2).max(12).default(2),
+  allowOddGroup: z.boolean().optional().default(false),
   dataspaceId: z.string().optional().nullable(),
   language: z.enum(["EN", "IT"]).default("EN"),
   transcriptionProvider: z.enum(["DEEPGRAM", "VOSK"]).default("DEEPGRAM"),
@@ -55,7 +57,7 @@ export const createPlanSchema = z.object({
   blocks: z
     .array(
       z.object({
-        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT"]),
+        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"]),
         durationSeconds: z.number().int().min(1).max(7200),
         posterId: z.string().optional().nullable(),
         meditationAnimationId: z.string().optional().nullable(),

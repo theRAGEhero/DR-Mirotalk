@@ -1,60 +1,77 @@
-import Link from "next/link";
 import { getServerSession } from "next-auth";
+import Link from "next/link";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatDateTime } from "@/lib/utils";
 
-function getPlanEndTime(startAt: Date, roundsCount: number, roundDurationMinutes: number) {
-  return new Date(startAt.getTime() + roundsCount * roundDurationMinutes * 60 * 1000);
+function formatDuration(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = `${totalSeconds % 60}`.padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
-export default async function PlansPage() {
-  const session = await getServerSession(authOptions);
+type TemplateBlock = {
+  type: string;
+  durationSeconds: number;
+};
 
+export default async function PlansLibraryPage() {
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return null;
   }
 
-  if (session.user.role !== "ADMIN") {
-    return <p className="text-sm text-slate-500">Access denied.</p>;
-  }
-
-  const plans = await prisma.plan.findMany({
-    orderBy: { startAt: "desc" },
-    include: { createdBy: { select: { email: true } } }
+  const templates = await prisma.planTemplate.findMany({
+    where: { isPublic: true },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      blocksJson: true,
+      updatedAt: true,
+      createdBy: { select: { email: true } }
+    }
   });
 
-  const now = new Date();
-  const plansWithEnd = plans.map((plan: (typeof plans)[number]) => ({
-    plan,
-    endAt: getPlanEndTime(plan.startAt, plan.roundsCount, plan.roundDurationMinutes)
-  }));
-
-  const upcomingPlans = plansWithEnd.filter(
-    ({ plan }: { plan: (typeof plans)[number] }) => plan.startAt > now
-  );
-  const activePlans = plansWithEnd.filter(
-    ({
-      plan,
-      endAt
-    }: {
-      plan: (typeof plans)[number];
-      endAt: Date;
-    }) => plan.startAt <= now && endAt >= now
-  );
-  const finishedPlans = plansWithEnd.filter(
-    ({ endAt }: { endAt: Date }) => endAt < now
-  );
+  const parsed = templates.map((template) => {
+    let blocks: TemplateBlock[] = [];
+    try {
+      blocks = JSON.parse(template.blocksJson);
+    } catch {
+      blocks = [];
+    }
+    const totalSeconds = blocks.reduce(
+      (sum, block) => sum + Math.max(1, Number(block.durationSeconds || 0)),
+      0
+    );
+    const types = blocks.reduce<Record<string, number>>((acc, block) => {
+      acc[block.type] = (acc[block.type] || 0) + 1;
+      return acc;
+    }, {});
+    return {
+      ...template,
+      totalSeconds,
+      types,
+      updatedAt: template.updatedAt.toISOString(),
+      authorEmail: template.createdBy?.email ?? "Unknown"
+    };
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-serif)" }}>
-            Plans
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Plans library
+          </p>
+          <h1
+            className="mt-2 text-2xl font-semibold text-slate-900"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            Public plans
           </h1>
-          <p className="text-sm text-slate-600">
-            Upcoming, active, and finished rotation plans.
+          <p className="mt-1 text-sm text-slate-600">
+            Choose a plan template to start quickly or customize before saving.
           </p>
         </div>
         <Link href="/plans/new" className="dr-button px-4 py-2 text-sm">
@@ -62,53 +79,72 @@ export default async function PlansPage() {
         </Link>
       </div>
 
-      <div className="space-y-4">
-        {[
-          { label: "Upcoming", items: upcomingPlans, empty: "No upcoming plans." },
-          { label: "Active", items: activePlans, empty: "No active plans right now." },
-          { label: "Finished", items: finishedPlans, empty: "No finished plans yet." }
-        ].map((section) => (
-          <div key={section.label} className="dr-card">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <h2 className="text-sm font-semibold uppercase text-slate-500">{section.label}</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <div className="min-w-[720px]">
-                <div className="grid grid-cols-6 gap-4 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-                  <span className="col-span-2">Title</span>
-                  <span>Starts</span>
-                  <span>Ends</span>
-                  <span>Pairings</span>
-                  <span>Created by</span>
+      {parsed.length === 0 ? (
+        <div className="dr-card p-6 text-sm text-slate-600">No public plans yet.</div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {parsed.map((template) => (
+            <div key={template.id} className="dr-card p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">{template.name}</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {template.description || "No description provided."}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">By {template.authorEmail}</p>
                 </div>
-                <div className="divide-y divide-slate-200">
-                  {section.items.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-slate-500">{section.empty}</div>
-                  ) : (
-                    section.items.map(
-                      ({ plan, endAt }: { plan: (typeof plans)[number]; endAt: Date }) => (
-                      <div key={plan.id} className="grid grid-cols-6 gap-4 px-4 py-4 text-sm">
-                        <div className="col-span-2">
-                          <Link
-                            href={`/plans/${plan.id}`}
-                            className="font-medium text-slate-900 hover:underline"
-                          >
-                            {plan.title}
-                          </Link>
-                        </div>
-                        <div className="text-slate-600">{formatDateTime(plan.startAt, plan.timezone)}</div>
-                        <div className="text-slate-600">{formatDateTime(endAt, plan.timezone)}</div>
-                        <div className="text-slate-600">{plan.roundsCount}</div>
-                        <div className="text-slate-600">{plan.createdBy.email}</div>
-                      </div>
-                    ))
-                  )}
+                <div className="text-xs text-slate-500">
+                  Updated {new Date(template.updatedAt).toLocaleString()}
                 </div>
               </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600">
+                <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 font-semibold">
+                  {formatDuration(template.totalSeconds)} total
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  {template.types.ROUND ?? 0} pairings
+                </span>
+                {template.types.MEDITATION ? (
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                    {template.types.MEDITATION} pauses
+                  </span>
+                ) : null}
+                {template.types.RECORD ? (
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                    {template.types.RECORD} records
+                  </span>
+                ) : null}
+                {template.types.POSTER ? (
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                    {template.types.POSTER} prompts
+                  </span>
+                ) : null}
+                {template.types.TEXT ? (
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                    {template.types.TEXT} notes
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href={`/plans/new?templateId=${template.id}`}
+                  className="dr-button px-4 py-2 text-sm"
+                >
+                  Use this plan
+                </Link>
+                <Link
+                  href={`/plans/new?templateId=${template.id}&customize=1`}
+                  className="dr-button-outline px-4 py-2 text-sm"
+                >
+                  Customize
+                </Link>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

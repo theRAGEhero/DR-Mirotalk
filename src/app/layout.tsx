@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   title: "Democracy Routes",
   description: "Manage Democracy Routes meeting links",
   icons: {
-    icon: "/logo-120.png",
-    apple: "/logo-120.png"
+    icon: "/albero-logo-dr-120.png",
+    apple: "/albero-logo-dr-120.png"
   }
 };
 

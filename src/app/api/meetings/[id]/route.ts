@@ -4,18 +4,32 @@ import { getSession } from "@/lib/session";
 import { createMeetingSchema } from "@/lib/validators";
 import { sendMail } from "@/lib/mailer";
 import crypto from "crypto";
+import { checkRateLimit, getRequestIp } from "@/lib/rateLimit";
 
 function generateToken() {
   return crypto.randomBytes(24).toString("base64url");
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getRequestIp(request);
+  const rate = checkRateLimit({
+    key: `meeting-update:${session.user.id}:${ip}`,
+    limit: 10,
+    windowMs: 10 * 60 * 1000
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
   }
 
   const meeting = await prisma.meeting.findUnique({

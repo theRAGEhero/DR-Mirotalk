@@ -19,6 +19,7 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
   const [code, setCode] = useState(initialCode);
   const [acceptPolicy, setAcceptPolicy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,9 +27,36 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
     setCode(initialCode);
   }, [initialCode]);
 
+  function getFieldErrorMap(payload: any): Record<string, string> {
+    const next: Record<string, string> = {};
+    const fieldErrors = payload?.error?.fieldErrors;
+    if (!fieldErrors || typeof fieldErrors !== "object") return next;
+    Object.entries(fieldErrors).forEach(([key, value]) => {
+      if (Array.isArray(value) && typeof value[0] === "string") {
+        next[key] = value[0];
+      }
+    });
+    return next;
+  }
+
+  function getErrorMessage(payload: any): string {
+    if (!payload) return "Unable to register";
+    const formError = payload?.error?.formErrors?.[0];
+    if (typeof formError === "string" && formError.length > 0) return formError;
+    const fieldErrors = payload?.error?.fieldErrors;
+    if (fieldErrors && typeof fieldErrors === "object") {
+      const firstKey = Object.keys(fieldErrors)[0];
+      const firstField = firstKey ? fieldErrors[firstKey]?.[0] : null;
+      if (typeof firstField === "string" && firstField.length > 0) return firstField;
+    }
+    if (typeof payload?.error === "string") return payload.error;
+    return "Unable to register";
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
     setSuccess(null);
     setLoading(true);
 
@@ -45,8 +73,8 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
       data = null;
     }
     if (!response.ok) {
-      const message = data?.error?.formErrors?.[0] ?? data?.error ?? "Unable to register";
-      setError(message);
+      setFieldErrors(getFieldErrorMap(data));
+      setError(getErrorMessage(data));
       setLoading(false);
       return;
     }
@@ -87,6 +115,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
           className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
           required
         />
+        {fieldErrors.email ? (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
+        ) : null}
       </div>
       <div>
         <label className="text-sm font-medium">Password</label>
@@ -97,6 +128,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
           className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
           required
         />
+        {fieldErrors.password ? (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
+        ) : null}
         <p className="mt-1 text-xs text-slate-500">Minimum 12 characters, 1 letter, 1 number.</p>
       </div>
       <div>
@@ -108,6 +142,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
           className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
           required
         />
+        {fieldErrors.confirmPassword ? (
+          <p className="mt-1 text-xs text-red-600">{fieldErrors.confirmPassword}</p>
+        ) : null}
       </div>
       {requireCode ? (
         <div>
@@ -118,6 +155,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
             className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
             required
           />
+          {fieldErrors.code ? (
+            <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>
+          ) : null}
         </div>
       ) : code ? (
         <div>
@@ -127,6 +167,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
             onChange={(event) => setCode(event.target.value)}
             className="dr-input mt-1 w-full rounded px-3 py-2 text-sm"
           />
+          {fieldErrors.code ? (
+            <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>
+          ) : null}
         </div>
       ) : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
@@ -161,6 +204,9 @@ export function RegisterForm({ initialCode, registrationOpen, requireCode }: Pro
             I have read and accept the privacy policy.
           </span>
         </label>
+        {fieldErrors.acceptPolicy ? (
+          <p className="mt-2 text-xs text-red-600">{fieldErrors.acceptPolicy}</p>
+        ) : null}
       </div>
       <button
         type="submit"

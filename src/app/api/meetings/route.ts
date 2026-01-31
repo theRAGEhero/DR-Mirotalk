@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { generateRoomId } from "@/lib/utils";
 import { sendMail } from "@/lib/mailer";
 import { notifyDataspaceSubscribers } from "@/lib/dataspaceNotifications";
+import { checkRateLimit, getRequestIp } from "@/lib/rateLimit";
 import crypto from "crypto";
 
 function generateToken() {
@@ -15,6 +16,19 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getRequestIp(request);
+  const rate = checkRateLimit({
+    key: `meeting-create:${session.user.id}:${ip}`,
+    limit: 10,
+    windowMs: 10 * 60 * 1000
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
   }
 
   const body = await request.json().catch(() => null);

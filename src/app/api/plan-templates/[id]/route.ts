@@ -10,7 +10,7 @@ const updateSchema = z.object({
   blocks: z
     .array(
       z.object({
-        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT"]),
+        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"]),
         durationSeconds: z.number().int().min(1).max(7200),
         posterId: z.string().optional().nullable(),
         meditationAnimationId: z.string().optional().nullable(),

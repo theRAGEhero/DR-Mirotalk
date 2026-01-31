@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { inviteMemberSchema } from "@/lib/validators";
 import { getSession } from "@/lib/session";
 import { sendMail } from "@/lib/mailer";
+import { checkRateLimit, getRequestIp } from "@/lib/rateLimit";
 import crypto from "crypto";
 
 function generateToken() {
@@ -13,6 +14,19 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getRequestIp(request);
+  const rate = checkRateLimit({
+    key: `meeting-guest-invite:${session.user.id}:${ip}`,
+    limit: 20,
+    windowMs: 10 * 60 * 1000
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many invites. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
   }
 
   const body = await request.json().catch(() => null);

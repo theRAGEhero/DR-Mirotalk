@@ -21,6 +21,8 @@ model User {
   calComLink         String?
   role               String           @default("USER")
   isGuest            Boolean          @default(false)
+  isDeleted          Boolean          @default(false)
+  deletedAt          DateTime?
   privacyPolicyAccepted Boolean       @default(false)
   mustChangePassword Boolean          @default(false)
   createdAt          DateTime         @default(now())
@@ -39,6 +41,7 @@ model User {
   dataspaceSubscriptions DataspaceSubscription[]
   texts              Text[]           @relation("TextAuthor")
   planMeditationSessions PlanMeditationSession[]
+  planRecordSessions  PlanRecordSession[]
   postersCreated     Poster[]         @relation("PosterCreator")
   planTextEntries    PlanTextEntry[]
   appLogs            AppLog[]
@@ -244,6 +247,7 @@ model Plan {
   transcriptionJobs    TranscriptionJob[]
   guestInvites         PlanGuestInvite[]
   analyses             PlanAnalysis[]
+  recordSessions       PlanRecordSession[]
 
   @@index([createdById])
   @@index([startAt])
@@ -306,6 +310,7 @@ model PlanBlock {
   plan           Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
   poster         Poster?  @relation(fields: [posterId], references: [id], onDelete: SetNull)
   textEntries    PlanTextEntry[]
+  recordSessions PlanRecordSession[]
 
   @@index([planId])
   @@index([orderIndex])
@@ -331,6 +336,27 @@ model PlanMeditationSession {
   @@index([planId])
   @@index([userId])
   @@index([meditationIndex])
+}
+
+model PlanRecordSession {
+  id             String   @id @default(cuid())
+  planId         String
+  blockId        String
+  userId         String
+  provider       String
+  language       String
+  roundId        String
+  transcriptText String?
+  transcriptJson String?
+  createdAt      DateTime @default(now())
+  plan           Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  block          PlanBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([blockId, userId])
+  @@index([planId])
+  @@index([blockId])
+  @@index([userId])
 }
 
 model PlanTextEntry {

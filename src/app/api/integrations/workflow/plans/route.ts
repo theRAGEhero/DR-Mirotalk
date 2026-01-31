@@ -12,7 +12,7 @@ const participantSchema = z.object({
 });
 
 const blockSchema = z.object({
-  type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT"]),
+  type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"]),
   duration_seconds: z.number().int().positive().max(21600),
   poster_id: z.string().optional().nullable(),
   poster_title: z.string().optional(),
@@ -28,13 +28,14 @@ const createWorkflowPlanSchema = z.object({
   rounds_count: z.number().int().positive().max(100),
   sync_mode: z.enum(["SERVER", "CLIENT"]).default("SERVER"),
   max_participants_per_room: z.number().int().min(2).max(12).default(2),
+  allow_odd_group: z.boolean().optional().default(false),
   timezone: z.string().max(100).optional().nullable(),
   dataspace_id: z.string().optional().nullable(),
   language: z.string().min(2).max(10).default("EN"),
   transcription_provider: z
     .enum(["DEEPGRAM", "DEEPGRAMLIVE", "VOSK"])
     .default("DEEPGRAM"),
-  participants: z.array(participantSchema).min(2),
+  participants: z.array(participantSchema).min(1),
   created_by_email: z.string().email().optional(),
   blocks: z.array(blockSchema).optional()
 });
@@ -58,7 +59,7 @@ function generateRoomId(language: string, transcriptionProvider: string) {
 }
 
 type WorkflowBlockInput = {
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
   posterId?: string | null;
   posterTitle?: string | null;
@@ -76,9 +77,21 @@ function buildDefaultBlocks(roundsCount: number, roundDurationMinutes: number) {
   return blocks;
 }
 
-function makeGroups(userIds: string[], maxParticipantsPerRoom: number) {
+function makeGroups(
+  userIds: string[],
+  maxParticipantsPerRoom: number,
+  allowOddGroup: boolean
+) {
   const list = [...userIds];
   if (maxParticipantsPerRoom === 2 && list.length % 2 === 1) {
+    if (allowOddGroup && list.length >= 3) {
+      const groups: Array<string[]> = [];
+      for (let i = 0; i < list.length - 3; i += 2) {
+        groups.push(list.slice(i, i + 2));
+      }
+      groups.push(list.slice(list.length - 3));
+      return groups;
+    }
     list.push("__break__");
   }
 
@@ -225,6 +238,7 @@ export async function POST(request: Request) {
   }
 
   const maxParticipantsPerRoom = parsed.data.max_participants_per_room;
+  const allowOddGroup = Boolean(parsed.data.allow_odd_group);
   const blocksInput =
     parsed.data.blocks && parsed.data.blocks.length > 0
       ? parsed.data.blocks.map((block) => ({
@@ -292,7 +306,7 @@ export async function POST(request: Request) {
   }>;
 
   for (let i = 0; i < roundBlocks.length; i += 1) {
-    const groups = makeGroups(rotation, maxParticipantsPerRoom);
+    const groups = makeGroups(rotation, maxParticipantsPerRoom, allowOddGroup);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId(
         parsed.data.language,

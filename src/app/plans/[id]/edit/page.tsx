@@ -53,7 +53,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
   const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
     (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
       const type = block.type as PlanBlockType;
-      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"].includes(type)) {
         return acc;
       }
       acc.push({
@@ -98,6 +98,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
 
   const [users, dataspaces] = await Promise.all([
     prisma.user.findMany({
+      where: { isDeleted: false },
       orderBy: { createdAt: "asc" },
       select: { id: true, email: true }
     }),

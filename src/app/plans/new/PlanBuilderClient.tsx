@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MEDITATION_ANIMATIONS } from "@/lib/meditation";
 import { renderPosterHtml } from "@/lib/poster";
 import { logClientError } from "@/lib/clientLog";
@@ -47,7 +47,7 @@ type Props = {
     participantIds: string[];
     blocks?: Array<{
       id: string;
-      type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+      type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
       durationSeconds: number;
       roundNumber: number | null;
       posterId: string | null;
@@ -69,7 +69,7 @@ function toLocalTimeInput(date: Date) {
 
 type PlanBlockDraft = {
   id: string;
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
   posterId?: string | null;
   meditationAnimationId?: string | null;
@@ -91,7 +91,7 @@ type PlanTemplate = {
   isPublic: boolean;
   createdById: string;
   blocks: Array<{
-    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
     durationSeconds: number;
     posterId?: string | null;
     meditationAnimationId?: string | null;
@@ -210,6 +210,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
   const [roundsCount, setRoundsCount] = useState(6);
   const [syncMode, setSyncMode] = useState<"SERVER" | "CLIENT">("SERVER");
   const [maxParticipantsPerRoom, setMaxParticipantsPerRoom] = useState(2);
+  const [allowOddGroup, setAllowOddGroup] = useState(false);
   const [language, setLanguage] = useState("EN");
   const [provider, setProvider] = useState("DEEPGRAM");
   const [timezone, setTimezone] = useState("");
@@ -253,6 +254,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [capacity, setCapacity] = useState<number | "">("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [includeMyself, setIncludeMyself] = useState(true);
   const [inviteEmails, setInviteEmails] = useState("");
   const [inviteSuggestions, setInviteSuggestions] = useState<UserOption[]>([]);
   const [showInviteSuggestions, setShowInviteSuggestions] = useState(false);
@@ -265,6 +267,11 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
   const [portalReady, setPortalReady] = useState(false);
+  const [loadedTemplateId, setLoadedTemplateId] = useState<string | null>(null);
+  const planTimelineRef = useRef<HTMLDivElement | null>(null);
+  const searchParams = useSearchParams();
+  const templateIdFromQuery = searchParams?.get("templateId") ?? null;
+  const customizeFromQuery = searchParams?.get("customize") === "1";
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -331,6 +338,16 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
   }, [portalReady]);
 
   useEffect(() => {
+    if (!currentUserId) return;
+    setSelected((prev) => {
+      const hasSelf = prev.includes(currentUserId);
+      if (includeMyself && !hasSelf) return [...prev, currentUserId];
+      if (!includeMyself && hasSelf) return prev.filter((id) => id !== currentUserId);
+      return prev;
+    });
+  }, [currentUserId, includeMyself]);
+
+  useEffect(() => {
     if (!initialPlan) return;
     setTitle(initialPlan.title);
     setDescription(initialPlan.description ?? "");
@@ -356,6 +373,9 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     setRequiresApproval(Boolean(initialPlan.requiresApproval));
     setCapacity(initialPlan.capacity ?? "");
     setSelected(initialPlan.participantIds);
+    if (currentUserId) {
+      setIncludeMyself(initialPlan.participantIds.includes(currentUserId));
+    }
     if (initialPlan.blocks && initialPlan.blocks.length > 0) {
       setPlanBlocks(
         initialPlan.blocks.map((block) => ({
@@ -530,6 +550,44 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       active = false;
     };
   }, [showTemplatesModal]);
+
+  useEffect(() => {
+    if (!templateIdFromQuery || templates.length > 0) return;
+    let active = true;
+    async function loadTemplates() {
+      setTemplateError(null);
+      const response = await fetch("/api/plan-templates");
+      const payload = await response.json().catch(() => null);
+      if (!active) return;
+      if (!response.ok) {
+        setTemplateError(normalizeFormError(payload, "Unable to load templates"));
+        return;
+      }
+      setTemplates(payload?.templates ?? []);
+    }
+    loadTemplates();
+    return () => {
+      active = false;
+    };
+  }, [templateIdFromQuery, templates.length]);
+
+  useEffect(() => {
+    if (!templateIdFromQuery) return;
+    if (!templates.length) return;
+    if (loadedTemplateId === templateIdFromQuery) return;
+    const template = templates.find((item) => item.id === templateIdFromQuery);
+    if (!template) {
+      setTemplateError("Template not found.");
+      return;
+    }
+    handleLoadTemplate(template);
+    setTitle(template.name);
+    setDescription(template.description ?? "");
+    setLoadedTemplateId(templateIdFromQuery);
+    if (customizeFromQuery && planTimelineRef.current) {
+      planTimelineRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [templateIdFromQuery, templates, loadedTemplateId, customizeFromQuery]);
 
   async function handleAudioUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -772,7 +830,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       ROUND: roundDurationMinutes * 60,
       MEDITATION: 5 * 60,
       POSTER: 30,
-      TEXT: 300
+      TEXT: 300,
+      RECORD: 180
     };
     setPlanBlocks((prev) => [
       ...prev,
@@ -905,9 +964,17 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         startAt,
         roundDurationMinutes: roundDuration,
         roundsCount: roundBlocks.length,
-        participantIds: selected,
+        participantIds: (() => {
+          const base = selected.filter((id) => id !== currentUserId);
+          if (includeMyself && currentUserId) {
+            return [currentUserId, ...base];
+          }
+          return base;
+        })(),
+        inviteEmails: normalizeEmailList(inviteEmails),
         syncMode,
         maxParticipantsPerRoom,
+        allowOddGroup,
         language,
         transcriptionProvider: provider,
         timezone: timezone || resolvedTimezone,
@@ -1092,6 +1159,15 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
               );
             })}
           </select>
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={allowOddGroup}
+              onChange={(event) => setAllowOddGroup(event.target.checked)}
+              className="h-4 w-4"
+            />
+            Allow a 3-person call when participants are odd.
+          </label>
         </div>
 
         <div>
@@ -1137,7 +1213,10 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           to choose its own audio and visual effect.
         </div>
 
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white/70 p-4">
+        <div
+          ref={planTimelineRef}
+          className="space-y-3 rounded-xl border border-slate-200 bg-white/70 p-4"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-900">Plan timeline</p>
@@ -1218,7 +1297,9 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                               ? "Pause"
                               : block.type === "POSTER"
                                 ? "Prompt"
-                                : "Notes"}
+                                : block.type === "TEXT"
+                                  ? "Notes"
+                                  : "Record"}
                         </span>
                         <select
                           value={block.type}
@@ -1243,6 +1324,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                           <option value="MEDITATION">Pause</option>
                           <option value="POSTER">Prompt</option>
                           <option value="TEXT">Notes</option>
+                          <option value="RECORD">Record</option>
                         </select>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
@@ -1404,6 +1486,9 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
             <button type="button" onClick={() => addBlock("TEXT")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
               + Notes
             </button>
+            <button type="button" onClick={() => addBlock("RECORD")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
+              + Record
+            </button>
           </div>
         </div>
 
@@ -1486,14 +1571,30 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         </div>
 
         <div>
-          <p className="text-sm font-medium">Participants</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Participants</p>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={includeMyself}
+                onChange={(event) => setIncludeMyself(event.target.checked)}
+                className="h-4 w-4"
+              />
+              Include myself
+            </label>
+          </div>
           <div className="mt-2 grid gap-2 md:grid-cols-2">
             {users.map((user) => (
               <label key={user.id} className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
-                  checked={selected.includes(user.id)}
-                  onChange={() => toggleUser(user.id)}
+                  checked={user.id === currentUserId ? includeMyself : selected.includes(user.id)}
+                  onChange={() =>
+                    user.id === currentUserId
+                      ? setIncludeMyself((prev) => !prev)
+                      : toggleUser(user.id)
+                  }
+                  disabled={user.id === currentUserId}
                   className="h-4 w-4"
                 />
                 {user.email}

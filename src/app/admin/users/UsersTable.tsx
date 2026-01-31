@@ -7,6 +7,8 @@ type UserRow = {
   email: string;
   role: string;
   mustChangePassword: boolean;
+  isDeleted: boolean;
+  deletedAtLabel: string | null;
   createdAtLabel: string;
   meetingsCount: number;
 };
@@ -46,7 +48,16 @@ export function UsersTable({ initialUsers }: Props) {
       return;
     }
 
-    setUsers((prev) => prev.filter((user) => user.id !== userId));
+    const deletedAtLabel = data?.deletedAt
+      ? new Date(data.deletedAt).toLocaleString()
+      : new Date().toLocaleString();
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === userId
+          ? { ...user, isDeleted: true, deletedAtLabel }
+          : user
+      )
+    );
     setMessage("User deleted");
   }
 
@@ -133,9 +144,10 @@ export function UsersTable({ initialUsers }: Props) {
     <div className="dr-card">
       <div className="overflow-x-auto">
         <div className="min-w-[760px]">
-          <div className="grid grid-cols-[2fr,0.8fr,0.8fr,0.7fr,1fr,1.4fr] gap-4 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase text-slate-500">
+          <div className="grid grid-cols-[2fr,0.8fr,0.9fr,0.8fr,0.7fr,1fr,1.4fr] gap-4 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase text-slate-500">
             <span>Email</span>
             <span>Role</span>
+            <span>Status</span>
             <span>Must change</span>
             <span>Meetings</span>
             <span>Created</span>
@@ -146,18 +158,27 @@ export function UsersTable({ initialUsers }: Props) {
               <div className="px-4 py-6 text-sm text-slate-500">No users yet.</div>
             ) : (
               users.map((user) => (
-                <div key={user.id} className="grid grid-cols-[2fr,0.8fr,0.8fr,0.7fr,1fr,1.4fr] gap-4 px-4 py-3 text-sm">
+                <div key={user.id} className="grid grid-cols-[2fr,0.8fr,0.9fr,0.8fr,0.7fr,1fr,1.4fr] gap-4 px-4 py-3 text-sm">
                   <div className="text-slate-900">{user.email}</div>
                   <div className="text-slate-700">
                     <select
                       value={user.role}
                       onChange={(event) => handleRoleChange(user.id, event.target.value)}
                       className="dr-input w-full rounded px-2 py-1 text-xs"
-                      disabled={updatingRoleId === user.id}
+                      disabled={updatingRoleId === user.id || user.isDeleted}
                     >
                       <option value="USER">USER</option>
                       <option value="ADMIN">ADMIN</option>
                     </select>
+                  </div>
+                  <div className="text-slate-600">
+                    {user.isDeleted ? (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                        Deleted {user.deletedAtLabel ? `· ${user.deletedAtLabel}` : ""}
+                      </span>
+                    ) : (
+                      "Active"
+                    )}
                   </div>
                   <div className="text-slate-500">{user.mustChangePassword ? "Yes" : "No"}</div>
                   <div className="text-slate-500">{user.meetingsCount}</div>
@@ -167,6 +188,7 @@ export function UsersTable({ initialUsers }: Props) {
                       type="button"
                       onClick={() => setResettingId(user.id)}
                       className="text-xs font-semibold text-slate-700 hover:text-slate-900"
+                      disabled={user.isDeleted}
                     >
                       Change password
                     </button>
@@ -174,7 +196,7 @@ export function UsersTable({ initialUsers }: Props) {
                       type="button"
                       onClick={() => handleResendInvite(user.id)}
                       className="text-xs font-semibold text-slate-700 hover:text-slate-900"
-                      disabled={resendingId === user.id}
+                      disabled={resendingId === user.id || user.isDeleted}
                     >
                       {resendingId === user.id ? "Resending..." : "Resend invite"}
                     </button>
@@ -182,9 +204,13 @@ export function UsersTable({ initialUsers }: Props) {
                       type="button"
                       onClick={() => handleDelete(user.id)}
                       className="text-xs font-semibold text-red-600 hover:text-red-700"
-                      disabled={deletingId === user.id}
+                      disabled={deletingId === user.id || user.isDeleted}
                     >
-                      {deletingId === user.id ? "Deleting..." : "Delete"}
+                      {user.isDeleted
+                        ? "Deleted"
+                        : deletingId === user.id
+                          ? "Deleting..."
+                          : "Delete"}
                     </button>
                   </div>
                 </div>

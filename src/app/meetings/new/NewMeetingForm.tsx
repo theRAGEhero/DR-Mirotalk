@@ -44,6 +44,18 @@ function normalizeFormError(payload: any, fallback: string) {
   return fallback;
 }
 
+function normalizeEmailList(raw: string) {
+  if (!raw) return [];
+  return raw
+    .split(/[\n,]/)
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
+}
+
+function formatEmailList(list: string[]) {
+  return list.join(", ");
+}
+
 function toLocalDateInput(date: Date) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
@@ -80,6 +92,8 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
   const [guestInviteStatus, setGuestInviteStatus] = useState<string | null>(null);
   const [guestInviteSending, setGuestInviteSending] = useState(false);
   const [timezone, setTimezone] = useState("");
+  const [includeMyself, setIncludeMyself] = useState(true);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const resolvedTimezone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     []
@@ -114,6 +128,36 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
     setRequiresApproval(Boolean(initialMeeting.requiresApproval));
     setCapacity(initialMeeting.capacity ?? "");
   }, [initialMeeting]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadMe() {
+      try {
+        const response = await fetch("/api/auth/session");
+        const payload = await response.json().catch(() => null);
+        if (!active) return;
+        const email = payload?.user?.email ?? null;
+        setCurrentUserEmail(email);
+      } catch {
+        setCurrentUserEmail(null);
+      }
+    }
+    loadMe();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserEmail) return;
+    const list = normalizeEmailList(inviteEmails);
+    const hasSelf = list.includes(currentUserEmail.toLowerCase());
+    if (includeMyself && !hasSelf) {
+      setInviteEmails(formatEmailList([currentUserEmail, ...list]));
+    } else if (!includeMyself && hasSelf) {
+      setInviteEmails(formatEmailList(list.filter((email) => email !== currentUserEmail.toLowerCase())));
+    }
+  }, [includeMyself, currentUserEmail, inviteEmails]);
 
   useEffect(() => {
     if (!timezone) {
@@ -198,10 +242,7 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
         date: date || undefined,
         startTime: startTime || undefined,
         durationMinutes: durationMinutes || undefined,
-        inviteEmails: inviteEmails
-          .split(/[,\n]/)
-          .map((value) => value.trim())
-          .filter(Boolean),
+        inviteEmails: normalizeEmailList(inviteEmails),
         language,
         transcriptionProvider: provider,
         timezone: timezone || resolvedTimezone,
@@ -442,7 +483,18 @@ export function NewMeetingForm({ dataspaces, mode = "create", initialMeeting }: 
       </div>
 
       <div>
-        <label className="text-sm font-medium">Invite users (optional)</label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="text-sm font-medium">Invite users (optional)</label>
+          <label className="flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={includeMyself}
+              onChange={(event) => setIncludeMyself(event.target.checked)}
+              className="h-4 w-4"
+            />
+            Include myself
+          </label>
+        </div>
         <div className="relative mt-1">
           <textarea
             value={inviteEmails}

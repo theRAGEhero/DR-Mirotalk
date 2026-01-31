@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { adminResetPasswordSchema } from "@/lib/validators";
@@ -28,23 +29,32 @@ export async function DELETE(
   if (!existing) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
-
-  const createdMeetings = await prisma.meeting.count({
-    where: { createdById: params.id }
-  });
-
-  if (createdMeetings > 0) {
-    return NextResponse.json(
-      { error: "User has created meetings and cannot be deleted" },
-      { status: 400 }
-    );
+  if (existing.isDeleted) {
+    return NextResponse.json({ error: "User is deleted" }, { status: 400 });
+  }
+  if (existing.isDeleted) {
+    return NextResponse.json({ message: "User already deleted" });
   }
 
-  await prisma.user.delete({
-    where: { id: params.id }
+  const tempPassword = crypto.randomBytes(32).toString("base64url");
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  const updated = await prisma.user.update({
+    where: { id: params.id },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+      mustChangePassword: true,
+      passwordHash,
+      role: "USER"
+    },
+    select: { deletedAt: true }
   });
 
-  return NextResponse.json({ message: "User deleted" });
+  return NextResponse.json({
+    message: "User deleted",
+    deletedAt: updated.deletedAt?.toISOString() ?? null
+  });
 }
 
 export async function POST(
@@ -72,6 +82,12 @@ export async function POST(
 
   if (!existing) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  if (existing.isDeleted) {
+    return NextResponse.json({ error: "User is deleted" }, { status: 400 });
+  }
+  if (existing.isDeleted) {
+    return NextResponse.json({ error: "User is deleted" }, { status: 400 });
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);

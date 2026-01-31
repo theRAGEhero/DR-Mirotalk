@@ -23,6 +23,8 @@ export default async function AdminUsersPage() {
       email: true,
       role: true,
       mustChangePassword: true,
+      isDeleted: true,
+      deletedAt: true,
       createdAt: true,
       _count: { select: { memberships: true } }
     }
@@ -33,6 +35,8 @@ export default async function AdminUsersPage() {
     email: user.email,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
+    isDeleted: user.isDeleted,
+    deletedAtLabel: user.deletedAt ? formatDateTime(user.deletedAt) : null,
     createdAtLabel: formatDateTime(user.createdAt),
     meetingsCount: user._count.memberships
   }));

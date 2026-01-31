@@ -30,6 +30,13 @@ type PlanMeetingTranscript = {
   transcriptText: string;
 };
 
+type PlanRecordEntry = {
+  blockId: string;
+  transcriptText: string;
+  userEmail: string;
+  createdAt: string;
+};
+
 export type PlanRecapData = {
   plan: {
     id: string;
@@ -44,6 +51,7 @@ export type PlanRecapData = {
   recap: {
     textEntries: PlanRecapEntry[];
     meditationSessions: PlanMeditationEntry[];
+    recordSessions: PlanRecordEntry[];
     meetingTranscripts: PlanMeetingTranscript[];
     participants: string[];
   };
@@ -193,7 +201,7 @@ export async function getPlanRecapDataForWorkflow(planId: string): Promise<PlanR
 
 async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
 
-  const [textEntries, meditationSessions] = await Promise.all([
+  const [textEntries, meditationSessions, recordSessions] = await Promise.all([
     prisma.planTextEntry.findMany({
       where: { planId: plan.id },
       select: {
@@ -207,6 +215,16 @@ async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
       select: {
         meditationIndex: true,
         roundAfter: true,
+        transcriptText: true,
+        createdAt: true,
+        user: { select: { email: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    }),
+    prisma.planRecordSession.findMany({
+      where: { planId: plan.id },
+      select: {
+        blockId: true,
         transcriptText: true,
         createdAt: true,
         user: { select: { email: true } }
@@ -247,21 +265,23 @@ async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
     })
   );
 
-  const participantIds = Array.from(
-    new Set(
-      plan.rounds.flatMap((round: (typeof plan.rounds)[number]) =>
-        round.pairs
-          .flatMap((pair: (typeof round.pairs)[number]) => [pair.userAId, pair.userBId])
-          .filter(Boolean)
-      )
-    )
-  ).filter((id): id is string => typeof id === "string");
-  const participants = participantIds.length
-    ? await prisma.user.findMany({
-        where: { id: { in: participantIds } },
-        select: { email: true }
-      })
-    : [];
+  const participantEmails = new Set<string>();
+  plan.rounds.forEach((round: (typeof plan.rounds)[number]) => {
+    round.pairs.forEach((pair: (typeof round.pairs)[number]) => {
+      if (pair.userA?.email) participantEmails.add(pair.userA.email);
+      if (pair.userB?.email) participantEmails.add(pair.userB.email);
+    });
+  });
+  textEntries.forEach((entry: (typeof textEntries)[number]) => {
+    if (entry.user?.email) participantEmails.add(entry.user.email);
+  });
+  meditationSessions.forEach((session: (typeof meditationSessions)[number]) => {
+    if (session.user?.email) participantEmails.add(session.user.email);
+  });
+  recordSessions.forEach((session: (typeof recordSessions)[number]) => {
+    if (session.user?.email) participantEmails.add(session.user.email);
+  });
+  const participants = Array.from(participantEmails);
 
   return {
     plan: {
@@ -289,13 +309,19 @@ async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
           createdAt: session.createdAt.toISOString()
         })
       ),
+      recordSessions: recordSessions.map((session: (typeof recordSessions)[number]) => ({
+        blockId: session.blockId,
+        transcriptText: session.transcriptText ?? "",
+        userEmail: session.user.email,
+        createdAt: session.createdAt.toISOString()
+      })),
       meetingTranscripts: meetingPairs.map((pair: (typeof meetingPairs)[number]) => ({
         meetingId: pair.meetingId,
         roundNumber: pair.roundNumber,
         participants: pair.participants,
         transcriptText: transcriptByMeeting.get(pair.meetingId) ?? ""
       })),
-      participants: participants.map((participant: (typeof participants)[number]) => participant.email)
+      participants
     }
   };
 }

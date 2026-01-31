@@ -22,9 +22,21 @@ function generateRoomId(language: string, transcriptionProvider: string) {
   return `${base}-${language}-${providerLabel}`;
 }
 
-function makeGroups(userIds: string[], maxParticipantsPerRoom: number) {
+function makeGroups(
+  userIds: string[],
+  maxParticipantsPerRoom: number,
+  allowOddGroup: boolean
+) {
   const list = [...userIds];
   if (maxParticipantsPerRoom === 2 && list.length % 2 === 1) {
+    if (allowOddGroup && list.length >= 3) {
+      const groups: Array<string[]> = [];
+      for (let i = 0; i < list.length - 3; i += 2) {
+        groups.push(list.slice(i, i + 2));
+      }
+      groups.push(list.slice(list.length - 3));
+      return groups;
+    }
     list.push("__break__");
   }
 
@@ -44,7 +56,7 @@ function rotate(userIds: string[]) {
 }
 
 type BlockInput = {
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
   posterId?: string | null;
   meditationAnimationId?: string | null;
@@ -126,7 +138,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const normalizedBlocks: PlanBlockInput[] = existingBlocks.reduce(
     (acc: PlanBlockInput[], block: (typeof existingBlocks)[number]) => {
       const type = block.type as PlanBlockType;
-      if (!["ROUND", "MEDITATION", "POSTER", "TEXT"].includes(type)) {
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"].includes(type)) {
         return acc;
       }
       acc.push({
@@ -175,7 +187,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     select: { id: true }
   });
 
-  if (users.length < 2) {
+  if (users.length < 1) {
     return NextResponse.json({ error: "Not enough valid participants" }, { status: 400 });
   }
 
@@ -204,6 +216,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 
   const maxParticipantsPerRoom = parsed.data.maxParticipantsPerRoom;
+  const allowOddGroup = Boolean(parsed.data.allowOddGroup);
   const blocksInput =
     parsed.data.blocks && parsed.data.blocks.length > 0
       ? parsed.data.blocks
@@ -214,7 +227,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   );
 
   if (roundBlocks.length < 1) {
-    return NextResponse.json({ error: "Add at least one round block." }, { status: 400 });
+    if (blocksInput.length < 1) {
+      return NextResponse.json({ error: "Add at least one block." }, { status: 400 });
+    }
   }
   if (missingPoster) {
     return NextResponse.json({ error: "Select a poster for every poster block." }, { status: 400 });
@@ -243,7 +258,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }>;
 
   for (let i = 0; i < roundBlocks.length; i += 1) {
-    const groups = makeGroups(rotation, maxParticipantsPerRoom);
+    const groups = makeGroups(rotation, maxParticipantsPerRoom, allowOddGroup);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId(parsed.data.language, parsed.data.transcriptionProvider);
       const roomPairs: Array<{ userAId: string; userBId: string | null; roomId: string }> = [];
@@ -294,8 +309,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         description: parsed.data.description || null,
         startAt,
         timezone: parsed.data.timezone || null,
-        roundDurationMinutes: Math.max(1, Math.round(firstRoundSeconds / 60)),
-        roundsCount: roundBlocks.length,
+      roundDurationMinutes: roundBlocks.length
+        ? Math.max(1, Math.round(firstRoundSeconds / 60))
+        : Math.max(1, parsed.data.roundDurationMinutes),
+      roundsCount: roundBlocks.length,
         syncMode: parsed.data.syncMode,
         maxParticipantsPerRoom,
         language: parsed.data.language,

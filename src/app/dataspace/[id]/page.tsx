@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/utils";
 import { DataspaceJoinLeave } from "@/app/dataspace/[id]/DataspaceJoinLeave";
 import { DataspaceInviteForm } from "@/app/dataspace/[id]/DataspaceInviteForm";
+import { DataspaceAnalysisPanel } from "@/app/dataspace/[id]/DataspaceAnalysisPanel";
 import { JoinButton } from "@/components/JoinButton";
 
 export default async function DataspaceDetailPage({ params }: { params: { id: string } }) {
@@ -361,6 +362,8 @@ export default async function DataspaceDetailPage({ params }: { params: { id: st
               )}
             </div>
           </div>
+
+          <DataspaceAnalysisPanel dataspaceId={dataspace.id} />
         </div>
       </div>
     </div>
