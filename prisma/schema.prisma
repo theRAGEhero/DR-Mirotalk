@@ -303,6 +303,7 @@ model PlanBlock {
   type           String
   durationSeconds Int
   roundNumber    Int?
+  roundMaxParticipants Int?
   posterId       String?
   meditationAnimationId String?
   meditationAudioUrl   String?

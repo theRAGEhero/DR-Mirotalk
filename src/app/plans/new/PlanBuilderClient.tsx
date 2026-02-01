@@ -50,6 +50,7 @@ type Props = {
       type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
       durationSeconds: number;
       roundNumber: number | null;
+      roundMaxParticipants?: number | null;
       posterId: string | null;
       meditationAnimationId?: string | null;
       meditationAudioUrl?: string | null;
@@ -71,6 +72,7 @@ type PlanBlockDraft = {
   id: string;
   type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
+  roundMaxParticipants?: number | null;
   posterId?: string | null;
   meditationAnimationId?: string | null;
   meditationAudioUrl?: string | null;
@@ -93,6 +95,7 @@ type PlanTemplate = {
   blocks: Array<{
     type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
     durationSeconds: number;
+    roundMaxParticipants?: number | null;
     posterId?: string | null;
     meditationAnimationId?: string | null;
     meditationAudioUrl?: string | null;
@@ -136,7 +139,12 @@ function defaultRoundBlocks(config: {
   const roundSeconds = config.roundDurationMinutes * 60;
 
   for (let round = 0; round < config.roundsCount; round += 1) {
-    blocks.push({ id: makeId(), type: "ROUND", durationSeconds: roundSeconds });
+    blocks.push({
+      id: makeId(),
+      type: "ROUND",
+      durationSeconds: roundSeconds,
+      roundMaxParticipants: null
+    });
   }
 
   return blocks;
@@ -175,7 +183,12 @@ function legacyBlocksFromPlan(config: {
   }
 
   for (let round = 0; round < config.roundsCount; round += 1) {
-    blocks.push({ id: makeId(), type: "ROUND", durationSeconds: roundSeconds });
+    blocks.push({
+      id: makeId(),
+      type: "ROUND",
+      durationSeconds: roundSeconds,
+      roundMaxParticipants: null
+    });
     if (config.meditationBetweenRounds && round < config.roundsCount - 1) {
       blocks.push({
         id: makeId(),
@@ -382,6 +395,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           id: block.id,
           type: block.type,
           durationSeconds: block.durationSeconds,
+          roundMaxParticipants: block.roundMaxParticipants ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -668,6 +682,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         blocks: planBlocks.map((block) => ({
           type: block.type,
           durationSeconds: block.durationSeconds,
+          roundMaxParticipants: block.roundMaxParticipants ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -694,6 +709,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         blocks: planBlocks.map((block) => ({
           type: block.type,
           durationSeconds: block.durationSeconds,
+          roundMaxParticipants: block.roundMaxParticipants ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -724,6 +740,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         blocks: planBlocks.map((block) => ({
           type: block.type,
           durationSeconds: block.durationSeconds,
+          roundMaxParticipants: block.roundMaxParticipants ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -747,6 +764,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
               blocks: planBlocks.map((block) => ({
                 type: block.type,
                 durationSeconds: block.durationSeconds,
+                roundMaxParticipants: block.roundMaxParticipants ?? null,
                 posterId: block.posterId ?? null,
                 meditationAnimationId: block.meditationAnimationId ?? null,
                 meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -808,6 +826,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       id: makeId(),
       type: block.type,
       durationSeconds: block.durationSeconds,
+      roundMaxParticipants: block.roundMaxParticipants ?? null,
       posterId:
         block.posterId && (hasPosterCatalog ? posterSet.has(block.posterId) : true)
           ? block.posterId
@@ -839,6 +858,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         id: makeId(),
         type,
         durationSeconds: defaults[type],
+        roundMaxParticipants: type === "ROUND" ? null : null,
         posterId: null,
         meditationAnimationId:
           type === "MEDITATION" ? defaultMeditationAnimationId || null : null,
@@ -881,6 +901,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         id: makeId(),
         type: "ROUND" as const,
         durationSeconds: Math.max(10, roundDurationMinutes * 60),
+        roundMaxParticipants: null,
         posterId: null
       }));
       return [...prev, ...additions];
@@ -993,6 +1014,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         blocks: effectiveBlocks.map((block) => ({
           type: block.type,
           durationSeconds: block.durationSeconds,
+          roundMaxParticipants: block.roundMaxParticipants ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -1306,6 +1328,10 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                           onChange={(event) =>
                             updateBlock(block.id, {
                               type: event.target.value as PlanBlockDraft["type"],
+                              roundMaxParticipants:
+                                event.target.value === "ROUND"
+                                  ? block.roundMaxParticipants ?? null
+                                  : null,
                               posterId:
                                 event.target.value === "POSTER" ? block.posterId ?? null : null,
                               meditationAnimationId:
@@ -1375,6 +1401,35 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                         </button>
                       </div>
                     </div>
+                    {block.type === "ROUND" ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        <label className="flex items-center gap-1">
+                          Max participants
+                          <input
+                            type="number"
+                            min={2}
+                            max={12}
+                            value={block.roundMaxParticipants ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              updateBlock(block.id, {
+                                roundMaxParticipants:
+                                  value === "" ? null : Math.min(12, Math.max(2, Number(value)))
+                              });
+                            }}
+                            placeholder={`Default (${maxParticipantsPerRoom})`}
+                            className="dr-input h-8 w-20 rounded px-2 text-xs"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => updateBlock(block.id, { roundMaxParticipants: null })}
+                          className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                        >
+                          Use plan default
+                        </button>
+                      </div>
+                    ) : null}
                     {block.type === "POSTER" ? (
                       <div className="mt-3 grid gap-2 md:grid-cols-2">
                         <select

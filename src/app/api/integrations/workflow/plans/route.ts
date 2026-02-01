@@ -14,6 +14,7 @@ const participantSchema = z.object({
 const blockSchema = z.object({
   type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"]),
   duration_seconds: z.number().int().positive().max(21600),
+  round_max_participants: z.number().int().min(2).max(12).optional().nullable(),
   poster_id: z.string().optional().nullable(),
   poster_title: z.string().optional(),
   poster_content: z.string().optional(),
@@ -61,6 +62,7 @@ function generateRoomId(language: string, transcriptionProvider: string) {
 type WorkflowBlockInput = {
   type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
+  roundMaxParticipants?: number | null;
   posterId?: string | null;
   posterTitle?: string | null;
   posterContent?: string | null;
@@ -244,6 +246,7 @@ export async function POST(request: Request) {
       ? parsed.data.blocks.map((block) => ({
           type: block.type,
           durationSeconds: block.duration_seconds,
+          roundMaxParticipants: block.round_max_participants ?? null,
           posterId: block.poster_id ?? null,
           posterTitle: block.poster_title ?? null,
           posterContent: block.poster_content ?? null,
@@ -306,7 +309,8 @@ export async function POST(request: Request) {
   }>;
 
   for (let i = 0; i < roundBlocks.length; i += 1) {
-    const groups = makeGroups(rotation, maxParticipantsPerRoom, allowOddGroup);
+    const roundMax = roundBlocks[i]?.roundMaxParticipants ?? maxParticipantsPerRoom;
+    const groups = makeGroups(rotation, roundMax, allowOddGroup);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId(
         parsed.data.language,
@@ -340,6 +344,7 @@ export async function POST(request: Request) {
       orderIndex: index,
       type: block.type,
       durationSeconds: block.durationSeconds,
+      roundMaxParticipants: block.roundMaxParticipants ?? null,
       posterId: block.posterId ?? null,
       meditationAnimationId: block.meditationAnimationId ?? null,
       meditationAudioUrl: block.meditationAudioUrl ?? null,

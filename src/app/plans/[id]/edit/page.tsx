@@ -26,6 +26,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           type: true,
           durationSeconds: true,
           roundNumber: true,
+          roundMaxParticipants: true,
           posterId: true,
           meditationAnimationId: true,
           meditationAudioUrl: true
@@ -61,6 +62,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
         type,
         durationSeconds: block.durationSeconds,
         roundNumber: block.roundNumber ?? null,
+        roundMaxParticipants: block.roundMaxParticipants ?? null,
         posterId: block.posterId ?? null
       });
       return acc;
@@ -150,6 +152,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
             type: block.type as PlanBlockType,
             durationSeconds: block.durationSeconds,
             roundNumber: block.roundNumber,
+            roundMaxParticipants: block.roundMaxParticipants ?? null,
             posterId: block.posterId,
             meditationAnimationId: block.meditationAnimationId ?? null,
             meditationAudioUrl: block.meditationAudioUrl ?? null

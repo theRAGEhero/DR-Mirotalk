@@ -46,6 +46,7 @@ export async function GET(
               type: true,
               durationSeconds: true,
               roundNumber: true,
+              roundMaxParticipants: true,
               posterId: true
             }
           }
@@ -98,6 +99,7 @@ export async function GET(
               type: true,
               durationSeconds: true,
               roundNumber: true,
+              roundMaxParticipants: true,
               posterId: true
             }
           }
@@ -119,6 +121,7 @@ export async function GET(
         type,
         durationSeconds: block.durationSeconds,
         roundNumber: block.roundNumber ?? null,
+        roundMaxParticipants: block.roundMaxParticipants ?? null,
         posterId: block.posterId ?? null
       });
       return acc;

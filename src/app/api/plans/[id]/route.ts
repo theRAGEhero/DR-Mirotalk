@@ -58,6 +58,7 @@ function rotate(userIds: string[]) {
 type BlockInput = {
   type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
+  roundMaxParticipants?: number | null;
   posterId?: string | null;
   meditationAnimationId?: string | null;
   meditationAudioUrl?: string | null;
@@ -133,7 +134,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const existingBlocks = await prisma.planBlock.findMany({
     where: { planId: plan.id },
     orderBy: { orderIndex: "asc" },
-    select: { id: true, type: true, durationSeconds: true, roundNumber: true, posterId: true }
+    select: {
+      id: true,
+      type: true,
+      durationSeconds: true,
+      roundNumber: true,
+      roundMaxParticipants: true,
+      posterId: true
+    }
   });
   const normalizedBlocks: PlanBlockInput[] = existingBlocks.reduce(
     (acc: PlanBlockInput[], block: (typeof existingBlocks)[number]) => {
@@ -146,6 +154,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         type,
         durationSeconds: block.durationSeconds,
         roundNumber: block.roundNumber ?? null,
+        roundMaxParticipants: block.roundMaxParticipants ?? null,
         posterId: block.posterId ?? null
       });
       return acc;
@@ -258,7 +267,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }>;
 
   for (let i = 0; i < roundBlocks.length; i += 1) {
-    const groups = makeGroups(rotation, maxParticipantsPerRoom, allowOddGroup);
+    const roundMax = roundBlocks[i]?.roundMaxParticipants ?? maxParticipantsPerRoom;
+    const groups = makeGroups(rotation, roundMax, allowOddGroup);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId(parsed.data.language, parsed.data.transcriptionProvider);
       const roomPairs: Array<{ userAId: string; userBId: string | null; roomId: string }> = [];
@@ -289,6 +299,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       orderIndex: index,
       type: block.type,
       durationSeconds: block.durationSeconds,
+      roundMaxParticipants: block.roundMaxParticipants ?? null,
       posterId: block.posterId ?? null,
       meditationAnimationId: block.meditationAnimationId ?? null,
       meditationAudioUrl: block.meditationAudioUrl ?? null,

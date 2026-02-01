@@ -54,6 +54,7 @@ function rotate(userIds: string[]) {
 type BlockInput = {
   type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
   durationSeconds: number;
+  roundMaxParticipants?: number | null;
   posterId?: string | null;
   meditationAnimationId?: string | null;
   meditationAudioUrl?: string | null;
@@ -270,7 +271,8 @@ export async function POST(request: Request) {
   }>;
 
   for (let i = 0; i < roundBlocks.length; i += 1) {
-    const groups = makeGroups(rotation, maxParticipantsPerRoom, allowOddGroup);
+    const roundMax = roundBlocks[i]?.roundMaxParticipants ?? maxParticipantsPerRoom;
+    const groups = makeGroups(rotation, roundMax, allowOddGroup);
     const pairs = groups.flatMap((group) => {
       const roomId = generateRoomId(parsed.data.language, parsed.data.transcriptionProvider);
       const roomPairs: Array<{ userAId: string; userBId: string | null; roomId: string }> = [];
@@ -301,6 +303,7 @@ export async function POST(request: Request) {
       orderIndex: index,
       type: block.type,
       durationSeconds: block.durationSeconds,
+      roundMaxParticipants: block.roundMaxParticipants ?? null,
       posterId: block.posterId ?? null,
       meditationAnimationId: block.meditationAnimationId ?? null,
       meditationAudioUrl: block.meditationAudioUrl ?? null,

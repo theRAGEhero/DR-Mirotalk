@@ -5,6 +5,7 @@ export type PlanBlockInput = {
   type: PlanBlockType;
   durationSeconds: number;
   roundNumber?: number | null;
+  roundMaxParticipants?: number | null;
   posterId?: string | null;
 };
 
