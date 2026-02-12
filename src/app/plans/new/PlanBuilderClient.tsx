@@ -30,6 +30,7 @@ type Props = {
     roundsCount: number;
     syncMode: "SERVER" | "CLIENT";
     maxParticipantsPerRoom: number;
+    allowOddGroup?: boolean;
     language: string;
     transcriptionProvider: string;
     timezone: string | null;
@@ -47,10 +48,12 @@ type Props = {
     participantIds: string[];
     blocks?: Array<{
       id: string;
-      type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+      type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
       durationSeconds: number;
       roundNumber: number | null;
       roundMaxParticipants?: number | null;
+      formQuestion?: string | null;
+      formChoices?: Array<{ key: string; label: string }> | null;
       posterId: string | null;
       meditationAnimationId?: string | null;
       meditationAudioUrl?: string | null;
@@ -70,9 +73,11 @@ function toLocalTimeInput(date: Date) {
 
 type PlanBlockDraft = {
   id: string;
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
   durationSeconds: number;
   roundMaxParticipants?: number | null;
+  formQuestion?: string | null;
+  formChoices?: Array<{ key: string; label: string }> | null;
   posterId?: string | null;
   meditationAnimationId?: string | null;
   meditationAudioUrl?: string | null;
@@ -93,9 +98,11 @@ type PlanTemplate = {
   isPublic: boolean;
   createdById: string;
   blocks: Array<{
-    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
     durationSeconds: number;
     roundMaxParticipants?: number | null;
+    formQuestion?: string | null;
+    formChoices?: Array<{ key: string; label: string }> | null;
     posterId?: string | null;
     meditationAnimationId?: string | null;
     meditationAudioUrl?: string | null;
@@ -121,6 +128,24 @@ function makeId() {
     return crypto.randomUUID();
   }
   return `block-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function makeChoiceKey(label: string) {
+  const base = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 40);
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return base ? `${base}-${suffix}` : `choice-${suffix}`;
+}
+
+function defaultFormChoices() {
+  return [
+    { key: makeChoiceKey("Option A"), label: "Option A" },
+    { key: makeChoiceKey("Option B"), label: "Option B" },
+    { key: makeChoiceKey("Option C"), label: "Option C" }
+  ];
 }
 
 function normalizeEmailList(raw: string) {
@@ -371,6 +396,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
     setRoundsCount(initialPlan.roundsCount);
     setSyncMode(initialPlan.syncMode);
     setMaxParticipantsPerRoom(initialPlan.maxParticipantsPerRoom);
+    setAllowOddGroup(Boolean(initialPlan.allowOddGroup));
     setLanguage(initialPlan.language);
     setProvider(initialPlan.transcriptionProvider);
     setTimezone(initialPlan.timezone ?? "");
@@ -396,6 +422,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           type: block.type,
           durationSeconds: block.durationSeconds,
           roundMaxParticipants: block.roundMaxParticipants ?? null,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: block.formChoices ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -683,6 +711,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           type: block.type,
           durationSeconds: block.durationSeconds,
           roundMaxParticipants: block.roundMaxParticipants ?? null,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: block.formChoices ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -710,6 +740,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           type: block.type,
           durationSeconds: block.durationSeconds,
           roundMaxParticipants: block.roundMaxParticipants ?? null,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: block.formChoices ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -741,6 +773,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           type: block.type,
           durationSeconds: block.durationSeconds,
           roundMaxParticipants: block.roundMaxParticipants ?? null,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: block.formChoices ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -765,6 +799,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                 type: block.type,
                 durationSeconds: block.durationSeconds,
                 roundMaxParticipants: block.roundMaxParticipants ?? null,
+                formQuestion: block.formQuestion ?? null,
+                formChoices: block.formChoices ?? null,
                 posterId: block.posterId ?? null,
                 meditationAnimationId: block.meditationAnimationId ?? null,
                 meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -827,6 +863,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       type: block.type,
       durationSeconds: block.durationSeconds,
       roundMaxParticipants: block.roundMaxParticipants ?? null,
+      formQuestion: block.formQuestion ?? null,
+      formChoices: block.formChoices ?? null,
       posterId:
         block.posterId && (hasPosterCatalog ? posterSet.has(block.posterId) : true)
           ? block.posterId
@@ -850,7 +888,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
       MEDITATION: 5 * 60,
       POSTER: 30,
       TEXT: 300,
-      RECORD: 180
+      RECORD: 180,
+      FORM: 120
     };
     setPlanBlocks((prev) => [
       ...prev,
@@ -859,6 +898,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
         type,
         durationSeconds: defaults[type],
         roundMaxParticipants: type === "ROUND" ? null : null,
+        formQuestion: type === "FORM" ? "" : null,
+        formChoices: type === "FORM" ? defaultFormChoices() : null,
         posterId: null,
         meditationAnimationId:
           type === "MEDITATION" ? defaultMeditationAnimationId || null : null,
@@ -1015,6 +1056,8 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
           type: block.type,
           durationSeconds: block.durationSeconds,
           roundMaxParticipants: block.roundMaxParticipants ?? null,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: block.formChoices ?? null,
           posterId: block.posterId ?? null,
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null
@@ -1321,7 +1364,9 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                                 ? "Prompt"
                                 : block.type === "TEXT"
                                   ? "Notes"
-                                  : "Record"}
+                                  : block.type === "FORM"
+                                    ? "Form"
+                                    : "Record"}
                         </span>
                         <select
                           value={block.type}
@@ -1331,6 +1376,12 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                               roundMaxParticipants:
                                 event.target.value === "ROUND"
                                   ? block.roundMaxParticipants ?? null
+                                  : null,
+                              formQuestion:
+                                event.target.value === "FORM" ? block.formQuestion ?? "" : null,
+                              formChoices:
+                                event.target.value === "FORM"
+                                  ? block.formChoices ?? defaultFormChoices()
                                   : null,
                               posterId:
                                 event.target.value === "POSTER" ? block.posterId ?? null : null,
@@ -1351,6 +1402,7 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                           <option value="POSTER">Prompt</option>
                           <option value="TEXT">Notes</option>
                           <option value="RECORD">Record</option>
+                          <option value="FORM">Form</option>
                         </select>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
@@ -1428,6 +1480,71 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
                         >
                           Use plan default
                         </button>
+                      </div>
+                    ) : null}
+                    {block.type === "FORM" ? (
+                      <div className="mt-3 space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold uppercase text-slate-500">
+                            Question
+                          </label>
+                          <input
+                            value={block.formQuestion ?? ""}
+                            onChange={(event) =>
+                              updateBlock(block.id, { formQuestion: event.target.value })
+                            }
+                            className="dr-input mt-2 w-full rounded px-2 py-2 text-xs"
+                            placeholder="Enter the question"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase text-slate-500">Choices</p>
+                          {(block.formChoices ?? []).map((choice, choiceIndex) => (
+                            <div key={choice.key} className="flex items-center gap-2">
+                              <input
+                                value={choice.label}
+                                onChange={(event) => {
+                                  const nextChoices = (block.formChoices ?? []).map(
+                                    (item, index) =>
+                                      index === choiceIndex
+                                        ? { ...item, label: event.target.value }
+                                        : item
+                                  );
+                                  updateBlock(block.id, { formChoices: nextChoices });
+                                }}
+                                className="dr-input h-8 flex-1 rounded px-2 text-xs"
+                                placeholder={`Option ${choiceIndex + 1}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextChoices = (block.formChoices ?? []).filter(
+                                    (_, index) => index !== choiceIndex
+                                  );
+                                  updateBlock(block.id, { formChoices: nextChoices });
+                                }}
+                                className="text-xs font-semibold text-slate-500 hover:text-slate-900"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextIndex = (block.formChoices ?? []).length + 1;
+                              const label = `Option ${nextIndex}`;
+                              const nextChoices = [
+                                ...(block.formChoices ?? []),
+                                { key: makeChoiceKey(label), label }
+                              ];
+                              updateBlock(block.id, { formChoices: nextChoices });
+                            }}
+                            className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                          >
+                            + Add option
+                          </button>
+                        </div>
                       </div>
                     ) : null}
                     {block.type === "POSTER" ? (
@@ -1540,6 +1657,9 @@ export function PlanBuilderClient({ users, dataspaces, mode = "create", initialP
             </button>
             <button type="button" onClick={() => addBlock("TEXT")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
               + Notes
+            </button>
+            <button type="button" onClick={() => addBlock("FORM")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
+              + Form
             </button>
             <button type="button" onClick={() => addBlock("RECORD")} className="rounded-full border border-slate-200 bg-white px-3 py-1 hover:text-slate-900">
               + Record

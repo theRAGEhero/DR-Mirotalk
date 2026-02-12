@@ -37,6 +37,13 @@ type PlanRecordEntry = {
   createdAt: string;
 };
 
+type PlanFormEntry = {
+  blockId: string;
+  choiceKey: string;
+  userEmail: string;
+  createdAt: string;
+};
+
 export type PlanRecapData = {
   plan: {
     id: string;
@@ -52,6 +59,7 @@ export type PlanRecapData = {
     textEntries: PlanRecapEntry[];
     meditationSessions: PlanMeditationEntry[];
     recordSessions: PlanRecordEntry[];
+    formResponses: PlanFormEntry[];
     meetingTranscripts: PlanMeetingTranscript[];
     participants: string[];
   };
@@ -201,7 +209,7 @@ export async function getPlanRecapDataForWorkflow(planId: string): Promise<PlanR
 
 async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
 
-  const [textEntries, meditationSessions, recordSessions] = await Promise.all([
+  const [textEntries, meditationSessions, recordSessions, formResponses] = await Promise.all([
     prisma.planTextEntry.findMany({
       where: { planId: plan.id },
       select: {
@@ -226,6 +234,16 @@ async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
       select: {
         blockId: true,
         transcriptText: true,
+        createdAt: true,
+        user: { select: { email: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    }),
+    prisma.planFormResponse.findMany({
+      where: { planId: plan.id },
+      select: {
+        blockId: true,
+        choiceKey: true,
         createdAt: true,
         user: { select: { email: true } }
       },
@@ -281,6 +299,9 @@ async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
   recordSessions.forEach((session: (typeof recordSessions)[number]) => {
     if (session.user?.email) participantEmails.add(session.user.email);
   });
+  formResponses.forEach((response: (typeof formResponses)[number]) => {
+    if (response.user?.email) participantEmails.add(response.user.email);
+  });
   const participants = Array.from(participantEmails);
 
   return {
@@ -314,6 +335,12 @@ async function buildRecapFromPlan(plan: PlanRecapPlan): Promise<PlanRecapData> {
         transcriptText: session.transcriptText ?? "",
         userEmail: session.user.email,
         createdAt: session.createdAt.toISOString()
+      })),
+      formResponses: formResponses.map((response: (typeof formResponses)[number]) => ({
+        blockId: response.blockId,
+        choiceKey: response.choiceKey,
+        userEmail: response.user.email,
+        createdAt: response.createdAt.toISOString()
       })),
       meetingTranscripts: meetingPairs.map((pair: (typeof meetingPairs)[number]) => ({
         meetingId: pair.meetingId,

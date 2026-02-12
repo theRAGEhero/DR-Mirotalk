@@ -105,7 +105,7 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
   const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
     (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
       const type = block.type as PlanBlockType;
-      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"].includes(type)) {
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD", "FORM"].includes(type)) {
         return acc;
       }
       acc.push({
@@ -292,6 +292,15 @@ export default async function PlanParticipantPage({ params }: { params: { id: st
           type: block.type as PlanBlockType,
           durationSeconds: block.durationSeconds,
           roundNumber: block.roundNumber,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: (() => {
+            if (!block.formChoicesJson) return null;
+            try {
+              return JSON.parse(block.formChoicesJson) as Array<{ key: string; label: string }>;
+            } catch {
+              return null;
+            }
+          })(),
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null,
           poster: block.poster

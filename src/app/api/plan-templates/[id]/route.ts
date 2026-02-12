@@ -10,9 +10,19 @@ const updateSchema = z.object({
   blocks: z
     .array(
       z.object({
-        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"]),
+        type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD", "FORM"]),
         durationSeconds: z.number().int().min(1).max(7200),
         roundMaxParticipants: z.number().int().min(2).max(12).optional().nullable(),
+        formQuestion: z.string().trim().max(240).optional().nullable(),
+        formChoices: z
+          .array(
+            z.object({
+              key: z.string().min(1).max(80),
+              label: z.string().min(1).max(120)
+            })
+          )
+          .optional()
+          .nullable(),
         posterId: z.string().optional().nullable(),
         meditationAnimationId: z.string().optional().nullable(),
         meditationAudioUrl: z.string().optional().nullable()

@@ -12,9 +12,19 @@ const participantSchema = z.object({
 });
 
 const blockSchema = z.object({
-  type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"]),
+  type: z.enum(["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD", "FORM"]),
   duration_seconds: z.number().int().positive().max(21600),
   round_max_participants: z.number().int().min(2).max(12).optional().nullable(),
+  form_question: z.string().trim().max(240).optional().nullable(),
+  form_choices: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(80),
+        label: z.string().min(1).max(120)
+      })
+    )
+    .optional()
+    .nullable(),
   poster_id: z.string().optional().nullable(),
   poster_title: z.string().optional(),
   poster_content: z.string().optional(),
@@ -60,9 +70,11 @@ function generateRoomId(language: string, transcriptionProvider: string) {
 }
 
 type WorkflowBlockInput = {
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
   durationSeconds: number;
   roundMaxParticipants?: number | null;
+  formQuestion?: string | null;
+  formChoices?: Array<{ key: string; label: string }> | null;
   posterId?: string | null;
   posterTitle?: string | null;
   posterContent?: string | null;
@@ -247,6 +259,8 @@ export async function POST(request: Request) {
           type: block.type,
           durationSeconds: block.duration_seconds,
           roundMaxParticipants: block.round_max_participants ?? null,
+          formQuestion: block.form_question ?? null,
+          formChoices: block.form_choices ?? null,
           posterId: block.poster_id ?? null,
           posterTitle: block.poster_title ?? null,
           posterContent: block.poster_content ?? null,
@@ -345,6 +359,8 @@ export async function POST(request: Request) {
       type: block.type,
       durationSeconds: block.durationSeconds,
       roundMaxParticipants: block.roundMaxParticipants ?? null,
+      formQuestion: block.formQuestion ?? null,
+      formChoicesJson: block.formChoices ? JSON.stringify(block.formChoices) : null,
       posterId: block.posterId ?? null,
       meditationAnimationId: block.meditationAnimationId ?? null,
       meditationAudioUrl: block.meditationAudioUrl ?? null,
@@ -366,6 +382,7 @@ export async function POST(request: Request) {
       roundsCount: roundBlocks.length,
       syncMode: parsed.data.sync_mode,
       maxParticipantsPerRoom,
+      allowOddGroup,
       language: parsed.data.language,
       transcriptionProvider: parsed.data.transcription_provider,
       meditationEnabled: resolvedBlocks.some((block) => block.type === "MEDITATION"),

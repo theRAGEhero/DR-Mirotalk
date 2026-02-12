@@ -159,9 +159,18 @@ export default async function GuestPlanPage({ params }: { params: { token: strin
         meditationAudioUrl={plan.meditationAudioUrl}
         blocks={plan.blocks.map((block: (typeof plan.blocks)[number]) => ({
           id: block.id,
-          type: block.type as "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD",
+          type: block.type as "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM",
           durationSeconds: block.durationSeconds,
           roundNumber: block.roundNumber,
+          formQuestion: block.formQuestion ?? null,
+          formChoices: (() => {
+            if (!block.formChoicesJson) return null;
+            try {
+              return JSON.parse(block.formChoicesJson) as Array<{ key: string; label: string }>;
+            } catch {
+              return null;
+            }
+          })(),
           meditationAnimationId: block.meditationAnimationId ?? null,
           meditationAudioUrl: block.meditationAudioUrl ?? null,
           poster: block.poster

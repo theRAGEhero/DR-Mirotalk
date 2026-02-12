@@ -14,6 +14,8 @@ model User {
   emailVerifiedAt    DateTime?
   emailVerificationToken String?
   emailVerificationExpiresAt DateTime?
+  passwordResetToken String?
+  passwordResetExpiresAt DateTime?
   telegramHandle     String?
   telegramChatId     String?
   telegramVerificationCode String?
@@ -42,6 +44,7 @@ model User {
   texts              Text[]           @relation("TextAuthor")
   planMeditationSessions PlanMeditationSession[]
   planRecordSessions  PlanRecordSession[]
+  planFormResponses   PlanFormResponse[]
   postersCreated     Poster[]         @relation("PosterCreator")
   planTextEntries    PlanTextEntry[]
   appLogs            AppLog[]
@@ -53,6 +56,7 @@ model User {
 
   @@index([role])
   @@index([emailVerificationToken])
+  @@index([passwordResetToken])
 }
 
 model Text {
@@ -225,6 +229,7 @@ model Plan {
   roundsCount          Int
   syncMode             String      @default("SERVER")
   maxParticipantsPerRoom Int       @default(2)
+  allowOddGroup        Boolean     @default(false)
   language             String      @default("EN")
   transcriptionProvider String     @default("DEEPGRAM")
   meditationEnabled    Boolean     @default(false)
@@ -248,6 +253,7 @@ model Plan {
   guestInvites         PlanGuestInvite[]
   analyses             PlanAnalysis[]
   recordSessions       PlanRecordSession[]
+  formResponses        PlanFormResponse[]
 
   @@index([createdById])
   @@index([startAt])
@@ -304,6 +310,8 @@ model PlanBlock {
   durationSeconds Int
   roundNumber    Int?
   roundMaxParticipants Int?
+  formQuestion   String?
+  formChoicesJson String?
   posterId       String?
   meditationAnimationId String?
   meditationAudioUrl   String?
@@ -312,11 +320,29 @@ model PlanBlock {
   poster         Poster?  @relation(fields: [posterId], references: [id], onDelete: SetNull)
   textEntries    PlanTextEntry[]
   recordSessions PlanRecordSession[]
+  formResponses  PlanFormResponse[]
 
   @@index([planId])
   @@index([orderIndex])
   @@index([type])
   @@index([posterId])
+}
+
+model PlanFormResponse {
+  id        String   @id @default(cuid())
+  planId    String
+  blockId   String
+  userId    String
+  choiceKey String
+  createdAt DateTime @default(now())
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  block     PlanBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([blockId, userId])
+  @@index([planId])
+  @@index([blockId])
+  @@index([userId])
 }
 
 model PlanMeditationSession {

@@ -8,6 +8,64 @@ import {
   type PlanBlockInput,
   type PlanBlockType
 } from "@/lib/planSchedule";
+import crypto from "crypto";
+
+function generateRoomId(language: string, transcriptionProvider: string) {
+  const providerLabel =
+    transcriptionProvider === "VOSK"
+      ? "VOSK"
+      : transcriptionProvider === "DEEPGRAMLIVE"
+        ? "DEEPGRAMLIVE"
+        : "DEEPGRAM";
+  const base = crypto.randomBytes(16).toString("base64url").replace(/_/g, "-");
+  return `${base}-${language}-${providerLabel}`;
+}
+
+function makeGroups(
+  userIds: string[],
+  maxParticipantsPerRoom: number,
+  allowOddGroup: boolean
+) {
+  const list = [...userIds];
+  if (maxParticipantsPerRoom === 2 && list.length % 2 === 1) {
+    if (allowOddGroup && list.length >= 3) {
+      const groups: Array<string[]> = [];
+      for (let i = 0; i < list.length - 3; i += 2) {
+        groups.push(list.slice(i, i + 2));
+      }
+      groups.push(list.slice(list.length - 3));
+      return groups;
+    }
+    list.push("__break__");
+  }
+
+  const groups: Array<string[]> = [];
+  for (let i = 0; i < list.length; i += maxParticipantsPerRoom) {
+    groups.push(list.slice(i, i + maxParticipantsPerRoom));
+  }
+  return groups;
+}
+
+function getFormBlockByRound(
+  blocks: Array<{ type: string; id: string }>,
+  roundNumber: number
+) {
+  let roundCounter = 0;
+  let pendingForm: { id: string } | null = null;
+  for (const block of blocks) {
+    if (block.type === "FORM") {
+      pendingForm = { id: block.id };
+    }
+    if (block.type === "ROUND") {
+      roundCounter += 1;
+      if (roundCounter === roundNumber) {
+        return pendingForm;
+      }
+      pendingForm = null;
+    }
+  }
+  return null;
+}
 
 export async function GET(
   _request: Request,
@@ -32,6 +90,8 @@ export async function GET(
           roundDurationMinutes: true,
           createdById: true,
           dataspaceId: true,
+          maxParticipantsPerRoom: true,
+          allowOddGroup: true,
           language: true,
           transcriptionProvider: true,
           meditationEnabled: true,
@@ -39,6 +99,10 @@ export async function GET(
           meditationBetweenRounds: true,
           meditationAtEnd: true,
           meditationDurationMinutes: true,
+          participants: {
+            where: { status: "APPROVED" },
+            select: { userId: true }
+          },
           blocks: {
             orderBy: { orderIndex: "asc" },
             select: {
@@ -85,6 +149,8 @@ export async function GET(
           roundDurationMinutes: true,
           createdById: true,
           dataspaceId: true,
+          maxParticipantsPerRoom: true,
+          allowOddGroup: true,
           language: true,
           transcriptionProvider: true,
           meditationEnabled: true,
@@ -92,6 +158,10 @@ export async function GET(
           meditationBetweenRounds: true,
           meditationAtEnd: true,
           meditationDurationMinutes: true,
+          participants: {
+            where: { status: "APPROVED" },
+            select: { userId: true }
+          },
           blocks: {
             orderBy: { orderIndex: "asc" },
             select: {
@@ -113,7 +183,7 @@ export async function GET(
   const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
     (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
       const type = block.type as PlanBlockType;
-      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"].includes(type)) {
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD", "FORM"].includes(type)) {
         return acc;
       }
       acc.push({
@@ -151,6 +221,7 @@ export async function GET(
     currentSegment?.type === "ROUND"
       ? currentSegment?.roundNumber ?? 1
       : currentSegment?.roundAfter ?? 1;
+  const roundBlocks = normalizedBlocks.filter((block) => block.type === "ROUND");
 
   let status: "pending" | "active" | "done" = "pending";
   if (elapsed >= 0 && nowMs < schedule.totalEndMs) {
@@ -163,6 +234,10 @@ export async function GET(
   let currentRoundMeetings: Array<{ roomId: string; meetingId: string }> = [];
 
   if (status === "active" && currentSegment?.type === "ROUND") {
+    const formBlock = getFormBlockByRound(plan.blocks, currentRound);
+    const roundMax =
+      roundBlocks[currentRound - 1]?.roundMaxParticipants ?? plan.maxParticipantsPerRoom;
+    const allowOddGroup = Boolean(plan.allowOddGroup);
     const round = await prisma.planRound.findUnique({
       where: {
         planId_roundNumber: {
@@ -176,11 +251,90 @@ export async function GET(
     });
 
     if (round) {
+      let pairs = round.pairs;
+      if (formBlock) {
+        const hasMeeting = pairs.some((pair: (typeof pairs)[number]) => pair.meetingId);
+        if (!hasMeeting) {
+          const participantIds = Array.from(
+            new Set(plan.participants.map((participant) => participant.userId))
+          ).sort();
+          const fallbackParticipants =
+            participantIds.length === 0
+              ? Array.from(
+                  new Set(
+                    pairs
+                      .flatMap((pair) => [pair.userAId, pair.userBId].filter(Boolean))
+                      .filter((id): id is string => typeof id === "string")
+                  )
+                ).sort()
+              : participantIds;
+          const responses = await prisma.planFormResponse.findMany({
+            where: { planId: plan.id, blockId: formBlock.id },
+            select: { userId: true, choiceKey: true }
+          });
+          const responseMap = new Map(
+            responses.map((response: (typeof responses)[number]) => [
+              response.userId,
+              response.choiceKey
+            ])
+          );
+          const grouped = new Map<string, string[]>();
+          fallbackParticipants.forEach((userId) => {
+            const key = responseMap.get(userId) ?? "__no_response__";
+            const list = grouped.get(key) ?? [];
+            list.push(userId);
+            grouped.set(key, list);
+          });
+
+          const recomputedPairs: Array<{ roomId: string; userAId: string; userBId: string | null }> =
+            [];
+          const groupEntries = Array.from(grouped.entries()).sort((a, b) =>
+            a[0].localeCompare(b[0])
+          );
+          for (const [, groupUsers] of groupEntries) {
+            const orderedUsers = [...groupUsers].sort();
+            const groups = makeGroups(orderedUsers, roundMax, allowOddGroup);
+            for (const group of groups) {
+              const roomId = generateRoomId(plan.language, plan.transcriptionProvider);
+              for (let index = 0; index < group.length; index += 2) {
+                const userAId = group[index];
+                if (userAId === "__break__") continue;
+                const userBId = group[index + 1] ?? null;
+                recomputedPairs.push({
+                  roomId,
+                  userAId,
+                  userBId: userBId === "__break__" ? null : userBId
+                });
+              }
+            }
+          }
+
+          await prisma.$transaction([
+            prisma.planPair.deleteMany({ where: { planRoundId: round.id } }),
+            ...(recomputedPairs.length
+              ? [
+                  prisma.planPair.createMany({
+                    data: recomputedPairs.map((pair) => ({
+                      planRoundId: round.id,
+                      roomId: pair.roomId,
+                      userAId: pair.userAId,
+                      userBId: pair.userBId
+                    }))
+                  })
+                ]
+              : [])
+          ]);
+          pairs = recomputedPairs.map((pair) => ({
+            ...pair,
+            meetingId: null
+          })) as typeof round.pairs;
+        }
+      }
       const roundStart = new Date(currentSegment.startAtMs);
       const roundEnd = new Date(currentSegment.endAtMs);
       const rooms = new Map<string, Set<string>>();
 
-      round.pairs.forEach((pair: (typeof round.pairs)[number]) => {
+      pairs.forEach((pair: (typeof round.pairs)[number]) => {
         if (!rooms.has(pair.roomId)) {
           rooms.set(pair.roomId, new Set());
         }
@@ -261,6 +415,45 @@ export async function GET(
     }
   }
 
+  let assignment: {
+    roundNumber: number;
+    roomId: string;
+    meetingId: string | null;
+    isBreak: boolean;
+  } | null = null;
+
+  if (status === "active" && currentSegment?.type === "ROUND") {
+    const meetingIdByRoom = new Map(
+      currentRoundMeetings.map((item: (typeof currentRoundMeetings)[number]) => [
+        item.roomId,
+        item.meetingId
+      ])
+    );
+    const round = await prisma.planRound.findUnique({
+      where: {
+        planId_roundNumber: {
+          planId: plan.id,
+          roundNumber: currentRound
+        }
+      },
+      include: {
+        pairs: true
+      }
+    });
+    const pair = round?.pairs.find(
+      (pairItem: (typeof round.pairs)[number]) =>
+        pairItem.userAId === viewer.user.id || pairItem.userBId === viewer.user.id
+    );
+    if (pair) {
+      assignment = {
+        roundNumber: currentRound,
+        roomId: pair.roomId,
+        meetingId: meetingIdByRoom.get(pair.roomId) ?? pair.meetingId ?? null,
+        isBreak: !pair.userBId
+      };
+    }
+  }
+
   return NextResponse.json({
     serverNow: now.toISOString(),
     status,
@@ -274,6 +467,7 @@ export async function GET(
     segmentEndsAt: currentSegment?.endAtMs
       ? new Date(currentSegment.endAtMs).toISOString()
       : null,
-    currentRoundMeetings: includeMeetings ? currentRoundMeetings : undefined
+    currentRoundMeetings: includeMeetings ? currentRoundMeetings : undefined,
+    assignment
   });
 }

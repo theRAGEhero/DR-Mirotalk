@@ -27,6 +27,8 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           durationSeconds: true,
           roundNumber: true,
           roundMaxParticipants: true,
+          formQuestion: true,
+          formChoicesJson: true,
           posterId: true,
           meditationAnimationId: true,
           meditationAudioUrl: true
@@ -54,7 +56,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
   const normalizedBlocks: PlanBlockInput[] = (plan.blocks ?? []).reduce(
     (acc: PlanBlockInput[], block: (typeof plan.blocks)[number]) => {
       const type = block.type as PlanBlockType;
-      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD"].includes(type)) {
+      if (!["ROUND", "MEDITATION", "POSTER", "TEXT", "RECORD", "FORM"].includes(type)) {
         return acc;
       }
       acc.push({
@@ -63,6 +65,15 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
         durationSeconds: block.durationSeconds,
         roundNumber: block.roundNumber ?? null,
         roundMaxParticipants: block.roundMaxParticipants ?? null,
+        formQuestion: block.formQuestion ?? null,
+        formChoices: (() => {
+          if (!block.formChoicesJson) return null;
+          try {
+            return JSON.parse(block.formChoicesJson) as Array<{ key: string; label: string }>;
+          } catch {
+            return null;
+          }
+        })(),
         posterId: block.posterId ?? null
       });
       return acc;
@@ -132,6 +143,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           roundsCount: plan.roundsCount,
           syncMode: plan.syncMode === "CLIENT" ? "CLIENT" : "SERVER",
           maxParticipantsPerRoom: plan.maxParticipantsPerRoom,
+          allowOddGroup: plan.allowOddGroup,
           language: plan.language,
           transcriptionProvider: plan.transcriptionProvider,
           timezone: plan.timezone ?? null,
@@ -153,6 +165,15 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
             durationSeconds: block.durationSeconds,
             roundNumber: block.roundNumber,
             roundMaxParticipants: block.roundMaxParticipants ?? null,
+            formQuestion: block.formQuestion ?? null,
+            formChoices: (() => {
+              if (!block.formChoicesJson) return null;
+              try {
+                return JSON.parse(block.formChoicesJson) as Array<{ key: string; label: string }>;
+              } catch {
+                return null;
+              }
+            })(),
             posterId: block.posterId,
             meditationAnimationId: block.meditationAnimationId ?? null,
             meditationAudioUrl: block.meditationAudioUrl ?? null

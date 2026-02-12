@@ -1,4 +1,4 @@
-export type PlanBlockType = "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+export type PlanBlockType = "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
 
 export type PlanBlockInput = {
   id?: string | null;

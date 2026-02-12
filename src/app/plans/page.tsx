@@ -125,6 +125,11 @@ export default async function PlansLibraryPage() {
                     {template.types.TEXT} notes
                   </span>
                 ) : null}
+                {template.types.FORM ? (
+                  <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                    {template.types.FORM} forms
+                  </span>
+                ) : null}
               </div>
 
               <div className="mt-5 flex flex-wrap gap-3">

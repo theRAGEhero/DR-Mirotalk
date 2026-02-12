@@ -33,9 +33,11 @@ type Props = {
   meditationAudioUrl?: string | null;
   blocks: Array<{
     id: string;
-    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+    type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
     durationSeconds: number;
     roundNumber: number | null;
+    formQuestion?: string | null;
+    formChoices?: Array<{ key: string; label: string }> | null;
     meditationAnimationId?: string | null;
     meditationAudioUrl?: string | null;
     poster: { id: string; title: string; content: string } | null;
@@ -97,6 +99,7 @@ export function ParticipantViewClient({
   const [now, setNow] = useState<number | null>(null);
   const [offsetMs, setOffsetMs] = useState<number | null>(null);
   const [meetingByRound, setMeetingByRound] = useState<Record<number, string>>({});
+  const [liveAssignment, setLiveAssignment] = useState<RoundAssignment | null>(null);
   type MeditationSession = {
     id: string;
     meditationIndex: number;
@@ -119,6 +122,20 @@ export function ParticipantViewClient({
   const [sendingRecord, setSendingRecord] = useState(false);
   const [completedRecordBlocks, setCompletedRecordBlocks] = useState<Set<string>>(
     () => new Set()
+  );
+  type FormResponse = {
+    blockId: string;
+    choiceKey: string;
+    userEmail: string;
+    createdAt: string;
+  };
+  const [formResponses, setFormResponses] = useState<Record<string, string>>({});
+  const [planRecapFormResponses, setPlanRecapFormResponses] = useState<FormResponse[]>(
+    []
+  );
+  const [sendingForm, setSendingForm] = useState(false);
+  const [formStatus, setFormStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle"
   );
   const [textEntry, setTextEntry] = useState("");
   const [textEntryStatus, setTextEntryStatus] = useState<"idle" | "loading" | "saving" | "saved" | "error">("idle");
@@ -261,6 +278,24 @@ export function ParticipantViewClient({
               return next;
             });
           }
+          if (payload?.assignment?.roomId) {
+            const base = assignments.find(
+              (entry) => entry.roundNumber === payload.assignment.roundNumber
+            );
+            setLiveAssignment({
+              roundNumber: payload.assignment.roundNumber,
+              roomId: payload.assignment.roomId,
+              meetingId: payload.assignment.meetingId ?? null,
+              isBreak: Boolean(payload.assignment.isBreak),
+              partnerLabel: base?.partnerLabel ?? "Partner"
+            });
+            if (payload.assignment.meetingId) {
+              setMeetingByRound((prev) => ({
+                ...prev,
+                [payload.assignment.roundNumber]: payload.assignment.meetingId
+              }));
+            }
+          }
         }
       } catch (error) {
         // keep local timing if server sync fails
@@ -375,7 +410,11 @@ export function ParticipantViewClient({
     };
   }, [planId, syncMode, status, assignments]);
 
-  const assignment = assignments.find((item) => item.roundNumber === currentRound);
+  const baseAssignment = assignments.find((item) => item.roundNumber === currentRound);
+  const assignment =
+    liveAssignment && liveAssignment.roundNumber === currentRound
+      ? { ...baseAssignment, ...liveAssignment }
+      : baseAssignment;
   const currentMeetingId =
     assignment?.meetingId ?? (assignment ? meetingByRound[assignment.roundNumber] : undefined);
   const joinUrl = assignment && !assignment.isBreak
@@ -399,6 +438,12 @@ export function ParticipantViewClient({
   const recordActive = status === "active" && currentSegment?.type === "RECORD";
   const recordIndex = currentSegment?.recordIndex ?? 0;
   const recordBlockId = currentSegment?.blockId ?? null;
+  const formActive = status === "active" && currentSegment?.type === "FORM";
+  const formBlockId = currentSegment?.blockId ?? null;
+  const currentFormBlock = formBlockId ? blockById.get(formBlockId) : null;
+  const currentFormChoices = currentFormBlock?.formChoices ?? [];
+  const currentFormQuestion = currentFormBlock?.formQuestion ?? "Form";
+  const currentFormResponse = formBlockId ? formResponses[formBlockId] : undefined;
   const experienceContainerClass = showModal
     ? "h-full min-h-0"
     : "min-h-[72vh] h-[72vh]";
@@ -408,6 +453,63 @@ export function ParticipantViewClient({
       setMeditationMuted(false);
     }
   }, [meditationActive, meditationIndex]);
+
+  useEffect(() => {
+    if (!formActive || !formBlockId) return;
+    const blockId = formBlockId;
+    let active = true;
+    async function loadFormResponse() {
+      try {
+        const response = await fetch(
+          withGuestToken(`/api/plans/${planId}/forms/${blockId}/response`)
+        );
+        const payload = await response.json().catch(() => null);
+        if (!active) return;
+        if (response.ok && payload?.choiceKey) {
+          setFormResponses((prev) => ({ ...prev, [blockId]: payload.choiceKey }));
+          setFormStatus("saved");
+        } else {
+          setFormStatus("idle");
+        }
+      } catch {
+        if (active) setFormStatus("idle");
+      }
+    }
+    loadFormResponse();
+    return () => {
+      active = false;
+    };
+  }, [formActive, formBlockId, planId]);
+
+  async function handleFormSelect(choiceKey: string) {
+    if (!formBlockId || sendingForm) return;
+    const blockId = formBlockId;
+    setSendingForm(true);
+    setFormStatus("saving");
+    try {
+      const response = await fetch(
+        withGuestToken(`/api/plans/${planId}/forms/${blockId}/response`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...guestHeaders },
+          body: JSON.stringify({ choiceKey })
+        }
+      );
+      const payload = await response.json().catch(() => null);
+      if (response.ok) {
+        setFormResponses((prev) => ({ ...prev, [blockId]: choiceKey }));
+        setFormStatus("saved");
+      } else {
+        setFormStatus("error");
+        // eslint-disable-next-line no-console
+        console.warn("Unable to save form response", payload);
+      }
+    } catch {
+      setFormStatus("error");
+    } finally {
+      setSendingForm(false);
+    }
+  }
 
   const experienceBody = posterActive ? (
     <div
@@ -453,6 +555,53 @@ export function ParticipantViewClient({
           style={{ fontFamily: "var(--font-serif)" }}
         />
       </div>
+    </div>
+  ) : formActive ? (
+    <div
+      className={`rounded-3xl border border-white/10 bg-gradient-to-br from-[#101827] via-[#0f172a] to-[#0b1220] px-6 py-10 text-slate-100 ${experienceContainerClass}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300/70">
+            Form
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold" style={{ fontFamily: "var(--font-serif)" }}>
+            {currentFormQuestion || "Question"}
+          </h2>
+        </div>
+        <p className="text-xs text-slate-300/70">
+          {formStatus === "saving" && "Saving..."}
+          {formStatus === "saved" && "Saved"}
+          {formStatus === "error" && "Save failed"}
+        </p>
+      </div>
+      <div className="mt-6 grid gap-3">
+        {currentFormChoices.length === 0 ? (
+          <p className="text-sm text-slate-300/70">No options configured.</p>
+        ) : (
+          currentFormChoices.map((choice) => {
+            const isSelected = currentFormResponse === choice.key;
+            return (
+              <button
+                key={choice.key}
+                type="button"
+                onClick={() => handleFormSelect(choice.key)}
+                disabled={Boolean(currentFormResponse) || sendingForm}
+                className={`w-full rounded-2xl border px-4 py-4 text-left text-sm transition ${
+                  isSelected
+                    ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-100"
+                    : "border-white/10 bg-white/5 text-slate-100 hover:border-white/30"
+                } ${Boolean(currentFormResponse) ? "cursor-default opacity-80" : ""}`}
+              >
+                {choice.label}
+              </button>
+            );
+          })
+        )}
+      </div>
+      {currentFormResponse ? (
+        <p className="mt-4 text-xs text-emerald-200/80">Response saved.</p>
+      ) : null}
     </div>
   ) : meditationActive ? (
     <MeditationRoundEmbed
@@ -613,6 +762,7 @@ export function ParticipantViewClient({
     setPlanRecapTextEntries(payload?.textEntries ?? []);
     setPlanRecapMeditations(payload?.meditationSessions ?? []);
     setPlanRecapRecordSessions(payload?.recordSessions ?? []);
+    setPlanRecapFormResponses(payload?.formResponses ?? []);
     setPlanRecapMeetingTranscripts(payload?.meetingTranscripts ?? []);
     setPlanRecapParticipants(payload?.participants ?? []);
     setRecapLoading(false);
@@ -624,6 +774,7 @@ export function ParticipantViewClient({
       planRecapTextEntries.length > 0 ||
       planRecapMeditations.length > 0 ||
       planRecapRecordSessions.length > 0 ||
+      planRecapFormResponses.length > 0 ||
       planRecapMeetingTranscripts.length > 0
     ) {
       return;
@@ -635,6 +786,7 @@ export function ParticipantViewClient({
     planRecapTextEntries.length,
     planRecapMeditations.length,
     planRecapRecordSessions.length,
+    planRecapFormResponses.length,
     planRecapMeetingTranscripts.length
   ]);
 
@@ -728,6 +880,7 @@ export function ParticipantViewClient({
                   : "Prompt"
                 : null}
               {status === "active" && currentSegment?.type === "TEXT" ? "Notes" : null}
+              {status === "active" && currentSegment?.type === "FORM" ? "Form" : null}
               {status === "active" && currentSegment?.type === "RECORD"
                 ? `Record ${recordIndex || ""}`.trim()
                 : null}
@@ -745,6 +898,7 @@ export function ParticipantViewClient({
               {currentSegment?.type === "MEDITATION" ? "Solo" : null}
               {currentSegment?.type === "POSTER" ? "Focus" : null}
               {currentSegment?.type === "TEXT" ? "Your notes" : null}
+              {currentSegment?.type === "FORM" ? "Your response" : null}
               {currentSegment?.type === "RECORD" ? "Solo" : null}
               {currentSegment?.type === "ROUND" ? (assignment ? assignment.partnerLabel : "-") : null}
             </span>
@@ -794,6 +948,8 @@ export function ParticipantViewClient({
                 ? "1:1 call"
                 : currentSegment?.type === "RECORD"
                   ? "Record"
+                  : currentSegment?.type === "FORM"
+                    ? "Form"
                   : currentSegment?.type ?? "Waiting"}
             </span>
           </div>
@@ -806,6 +962,7 @@ export function ParticipantViewClient({
               {currentSegment?.type === "MEDITATION" ? "Solo" : null}
               {currentSegment?.type === "POSTER" ? "Focus" : null}
               {currentSegment?.type === "TEXT" ? "Your notes" : null}
+              {currentSegment?.type === "FORM" ? "Your response" : null}
               {currentSegment?.type === "RECORD" ? "Solo" : null}
               {currentSegment?.type === "ROUND" ? (assignment ? assignment.partnerLabel : "-") : null}
             </span>
@@ -873,7 +1030,7 @@ export function ParticipantViewClient({
                 Your journey, captured
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                Notes, prompts, and pairing highlights from this plan.
+              Notes, forms, prompts, and pairing highlights from this plan.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1098,6 +1255,68 @@ export function ParticipantViewClient({
                                   {entryItem?.transcriptText
                                     ? entryItem.transcriptText
                                     : "No recording transcript."}
+                                </p>
+                              </div>
+                            );
+                          }
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (segment.type === "FORM") {
+                const block = segment.blockId ? blockById.get(segment.blockId) : null;
+                const choices = block?.formChoices ?? [];
+                const choiceLabel = (key?: string | null) =>
+                  choices.find((choice) => choice.key === key)?.label ?? key ?? "";
+                const personalChoiceKey = segment.blockId ? formResponses[segment.blockId] : "";
+                const planChoices =
+                  recapView === "plan" && segment.blockId
+                    ? planRecapFormResponses.filter((item) => item.blockId === segment.blockId)
+                    : [];
+                return (
+                  <div
+                    key={`recap-form-${index}`}
+                    className="rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase text-indigo-700">
+                        Form
+                      </p>
+                      <p className="text-xs text-indigo-700/70">
+                        Duration {formatDuration(durationSeconds)}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-sm text-indigo-900">
+                      {block?.formQuestion || "Question"}
+                    </p>
+                    {recapView === "personal" ? (
+                      <p className="mt-2 text-sm text-indigo-900">
+                        {personalChoiceKey
+                          ? choiceLabel(personalChoiceKey)
+                          : "No response submitted."}
+                      </p>
+                    ) : (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm text-indigo-900">
+                        {(planRecapParticipants.length ? planRecapParticipants : [userEmail]).map(
+                          (participant) => {
+                            const entryItem = planChoices.find(
+                              (item) => item.userEmail === participant
+                            );
+                            return (
+                              <div
+                                key={`${participant}-${segment.blockId}`}
+                                className="rounded border border-indigo-200/60 bg-white/70 px-3 py-2"
+                              >
+                                <p className="text-xs font-semibold uppercase text-indigo-700">
+                                  {participant}
+                                </p>
+                                <p className="mt-1 text-sm text-indigo-900">
+                                  {entryItem?.choiceKey
+                                    ? choiceLabel(entryItem.choiceKey)
+                                    : "No response."}
                                 </p>
                               </div>
                             );

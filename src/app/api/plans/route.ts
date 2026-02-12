@@ -52,9 +52,11 @@ function rotate(userIds: string[]) {
 }
 
 type BlockInput = {
-  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD";
+  type: "ROUND" | "MEDITATION" | "POSTER" | "TEXT" | "RECORD" | "FORM";
   durationSeconds: number;
   roundMaxParticipants?: number | null;
+  formQuestion?: string | null;
+  formChoices?: Array<{ key: string; label: string }> | null;
   posterId?: string | null;
   meditationAnimationId?: string | null;
   meditationAudioUrl?: string | null;
@@ -304,6 +306,8 @@ export async function POST(request: Request) {
       type: block.type,
       durationSeconds: block.durationSeconds,
       roundMaxParticipants: block.roundMaxParticipants ?? null,
+      formQuestion: block.formQuestion ?? null,
+      formChoicesJson: block.formChoices ? JSON.stringify(block.formChoices) : null,
       posterId: block.posterId ?? null,
       meditationAnimationId: block.meditationAnimationId ?? null,
       meditationAudioUrl: block.meditationAudioUrl ?? null,
@@ -328,6 +332,7 @@ export async function POST(request: Request) {
       roundsCount: roundBlocks.length,
       syncMode: parsed.data.syncMode,
       maxParticipantsPerRoom,
+      allowOddGroup,
       language: parsed.data.language,
       transcriptionProvider: parsed.data.transcriptionProvider,
       meditationEnabled: blocksInput.some((block) => block.type === "MEDITATION"),
