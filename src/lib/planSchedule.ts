@@ -6,6 +6,8 @@ export type PlanBlockInput = {
   durationSeconds: number;
   roundNumber?: number | null;
   roundMaxParticipants?: number | null;
+  formQuestion?: string | null;
+  formChoices?: Array<{ key: string; label: string }> | null;
   posterId?: string | null;
 };
 
